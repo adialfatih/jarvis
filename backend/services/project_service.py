@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 
 
@@ -54,6 +55,23 @@ class ProjectService:
 
         self.scan()
         return self.get_by_path(clean_path)
+
+    def run_command(self, command: str) -> dict:
+        match = re.fullmatch(r'\s*mkdir\s+(?:"([^"]+)"|(.+?))\s*', command, re.IGNORECASE)
+        if not match:
+            raise ValueError('Command belum didukung. Gunakan: mkdir "D:\\path\\folder-baru"')
+
+        raw_path = match.group(1) or match.group(2)
+        path = Path(raw_path.strip()).expanduser()
+        if not path.name:
+            raise ValueError("Nama folder wajib diisi")
+
+        path.mkdir(parents=True, exist_ok=True)
+        project = self.add_custom(str(path))
+        if not project:
+            raise ValueError("Folder gagal dibuat atau tidak dapat dibuka")
+
+        return project
 
     def get_by_path(self, path: str) -> dict | None:
         normalized = normalize_path(path)

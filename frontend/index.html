@@ -2,412 +2,567 @@
 <html lang="id">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Jarvis Remote Codex</title>
   <script src="https://cdn.jsdelivr.net/npm/ansi_up@5/ansi_up.js"></script>
   <style>
     :root {
       color-scheme: dark;
-      --bg: #101214;
-      --panel: #181b1f;
-      --panel-2: #20242a;
-      --line: #323943;
-      --text: #f0f3f6;
-      --muted: #9aa4af;
-      --accent: #2fbf71;
-      --danger: #ff5f57;
+      --bg: #0a0d10;
+      --panel: #12171d;
+      --panel-2: #19212a;
+      --line: #29333e;
+      --text: #edf3f8;
+      --muted: #8d9aa7;
+      --accent: #35c978;
+      --danger: #ff625c;
       --warn: #f4b942;
-      --blue: #58a6ff;
-      --terminal: #07090b;
+      --blue: #64a9ff;
+      --terminal: #06080a;
     }
 
     * { box-sizing: border-box; }
 
-    body {
+    html, body {
+      height: 100%;
       margin: 0;
-      min-height: 100vh;
+      overflow: hidden;
       background: var(--bg);
       color: var(--text);
       font-family: Inter, Segoe UI, system-ui, -apple-system, sans-serif;
     }
 
-    button, input, textarea, select {
-      font: inherit;
-    }
+    button, input, textarea { font: inherit; }
 
     button {
+      display: inline-grid;
+      min-width: 42px;
+      min-height: 42px;
+      place-items: center;
       border: 1px solid var(--line);
+      border-radius: 10px;
       background: var(--panel-2);
       color: var(--text);
-      min-height: 44px;
-      border-radius: 8px;
-      padding: 0 14px;
       cursor: pointer;
     }
 
-    button:disabled {
-      opacity: .5;
-      cursor: not-allowed;
-    }
+    button:disabled { cursor: not-allowed; opacity: .55; }
+    button:hover { border-color: #425263; }
 
     input, textarea {
       width: 100%;
       border: 1px solid var(--line);
-      background: #0c0e11;
-      color: var(--text);
-      border-radius: 8px;
-      padding: 12px;
+      border-radius: 10px;
       outline: none;
+      background: #0b0f13;
+      color: var(--text);
+      padding: 11px 12px;
     }
 
-    textarea {
-      min-height: 92px;
-      resize: vertical;
+    input:focus, textarea:focus { border-color: var(--blue); }
+
+    .icon {
+      width: 20px;
+      height: 20px;
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 2;
     }
 
     .app {
-      width: min(100%, 920px);
-      min-height: 100vh;
-      margin: 0 auto;
+      height: 100dvh;
       display: grid;
-      grid-template-rows: auto auto 1fr auto;
-      gap: 10px;
-      padding: 10px;
-    }
-
-    .topbar, .projectbar, .controls {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 12px;
+      grid-template-rows: 54px minmax(0, 1fr) auto;
+      background: var(--terminal);
     }
 
     .topbar {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      gap: 12px;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
     }
 
-    .brand {
+    .top-left, .top-right, .status-dots, .composer-actions, .drawer-actions {
       display: flex;
-      flex-direction: column;
-      gap: 2px;
+      align-items: center;
+      gap: 8px;
     }
 
-    .brand strong {
-      font-size: 22px;
-      letter-spacing: 0;
+    .brand { font-size: 16px; letter-spacing: .12em; }
+
+    .icon-button {
+      min-width: 38px;
+      min-height: 38px;
+      padding: 0;
+      background: transparent;
     }
 
-    .brand span, .project-meta, .small {
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .statuses {
-      display: grid;
-      gap: 6px;
-      justify-items: end;
-      white-space: nowrap;
+    .status-button {
+      display: flex;
+      min-width: auto;
+      min-height: 38px;
+      gap: 7px;
+      padding: 0 10px;
+      background: transparent;
     }
 
     .dot {
       width: 9px;
       height: 9px;
-      display: inline-block;
+      display: block;
       border-radius: 50%;
-      margin-right: 7px;
       background: var(--danger);
+      box-shadow: 0 0 0 2px rgba(255, 98, 92, .12);
     }
 
-    .dot.ok { background: var(--accent); }
-    .dot.warn { background: var(--warn); }
-
-    .project-row {
-      display: grid;
-      grid-template-columns: 1fr auto auto;
-      gap: 8px;
-      align-items: center;
-      margin-top: 8px;
+    .dot.ok {
+      background: var(--accent);
+      box-shadow: 0 0 0 2px rgba(53, 201, 120, .12);
     }
 
-    .project-name {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      font-weight: 700;
+    .dot.warn {
+      background: var(--warn);
+      box-shadow: 0 0 0 2px rgba(244, 185, 66, .12);
     }
 
-    .terminal-wrap {
-      min-height: 260px;
-      display: grid;
-      grid-template-rows: auto 1fr;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      overflow: hidden;
+    .terminal {
+      min-height: 0;
+      overflow-y: auto;
+      padding: 14px clamp(10px, 3vw, 32px) 22px;
+      scroll-behavior: smooth;
     }
 
-    .terminal-head {
-      min-height: 42px;
+    .messages {
+      width: min(100%, 1180px);
+      min-height: 100%;
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 10px;
-      padding: 0 12px;
-      border-bottom: 1px solid var(--line);
+      flex-direction: column;
+      gap: 12px;
+      margin: 0 auto;
+    }
+
+    .empty {
+      margin: auto;
       color: var(--muted);
       font-size: 13px;
-      text-transform: uppercase;
+      text-align: center;
     }
 
-    #terminal {
-      background: var(--terminal);
-      color: #e7edf3;
-      font-family: Consolas, "Cascadia Mono", monospace;
-      font-size: 13px;
-      line-height: 1.45;
-      overflow-y: auto;
-      padding: 12px;
-      white-space: pre-wrap;
+    .message {
+      max-width: min(92%, 980px);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
       word-break: break-word;
     }
 
-    .controls {
-      display: grid;
-      gap: 10px;
+    .message.output {
+      align-self: flex-start;
+      border-color: transparent;
+      background: transparent;
+      color: #dbe5ee;
+      padding-left: 0;
     }
 
-    .mic {
-      min-height: 70px;
-      background: #1b5e3a;
-      border-color: #288b58;
-      font-weight: 800;
-      font-size: 17px;
+    .message.user {
+      align-self: flex-end;
+      border-color: #285c91;
+      background: #12385f;
+      color: #f3f8fd;
+    }
+
+    .output pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font: 13px/1.5 Consolas, "Cascadia Mono", monospace;
+    }
+
+    .composer-wrap {
+      border-top: 1px solid var(--line);
+      background: rgba(18, 23, 29, .98);
+      padding: 9px max(9px, env(safe-area-inset-right)) max(9px, env(safe-area-inset-bottom));
+    }
+
+    .composer {
+      width: min(100%, 1180px);
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: end;
+      gap: 8px;
+      margin: 0 auto;
+    }
+
+    .composer textarea {
+      min-height: 44px;
+      max-height: 132px;
+      resize: none;
+      line-height: 20px;
     }
 
     .mic.recording {
-      background: #7f1d1d;
-      border-color: #ef4444;
-    }
-
-    .send-row, .footer-row {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 8px;
-      align-items: center;
+      border-color: var(--danger);
+      background: #6e2424;
+      color: #fff;
     }
 
     .send {
-      background: #17406f;
-      border-color: #2869ad;
-      font-weight: 700;
+      border-color: #2e6ea9;
+      background: #185188;
+      color: #fff;
+    }
+
+    .composer-meta {
+      width: min(100%, 1180px);
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 6px auto 0;
+      color: var(--muted);
+      font-size: 12px;
     }
 
     .toggle {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      color: var(--muted);
+      gap: 6px;
       user-select: none;
     }
 
-    .toggle input {
-      width: 18px;
-      height: 18px;
-    }
+    .toggle input { width: 15px; height: 15px; }
 
-    .modal {
+    .backdrop {
       position: fixed;
       inset: 0;
       display: none;
-      background: rgba(0, 0, 0, .65);
-      padding: 14px;
+      background: rgba(0, 0, 0, .56);
       z-index: 20;
     }
 
-    .modal.open {
-      display: grid;
-      place-items: center;
-    }
+    .backdrop.open { display: block; }
 
-    .modal-panel {
-      width: min(100%, 760px);
-      max-height: calc(100vh - 28px);
+    .drawer {
+      width: min(92vw, 440px);
+      height: 100%;
       display: grid;
-      grid-template-rows: auto auto 1fr auto;
+      grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+      border-right: 1px solid var(--line);
       background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      overflow: hidden;
+      box-shadow: 12px 0 32px rgba(0, 0, 0, .28);
     }
 
-    .modal-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+    .drawer-head, .drawer-active, .drawer-search, .drawer-tools {
       padding: 12px;
       border-bottom: 1px solid var(--line);
     }
 
-    .modal-body {
-      overflow: auto;
-      padding: 12px;
+    .drawer-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
     }
 
-    .group {
-      margin: 14px 0;
+    .drawer-active { background: #101820; }
+
+    .label, .small {
+      color: var(--muted);
+      font-size: 12px;
     }
+
+    .active-name {
+      margin-top: 4px;
+      overflow: hidden;
+      color: var(--text);
+      font-weight: 700;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .active-path {
+      margin-top: 3px;
+      overflow-wrap: anywhere;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .project-list { overflow-y: auto; padding: 9px 12px; }
+    .group { margin-bottom: 15px; }
 
     .group-title {
+      margin: 5px 0 7px;
+      overflow-wrap: anywhere;
       color: var(--blue);
-      font-size: 13px;
-      margin-bottom: 7px;
-      word-break: break-all;
+      font-size: 12px;
     }
 
     .project-item {
       width: 100%;
-      min-height: 50px;
       display: grid;
-      grid-template-columns: 1fr auto;
-      align-items: center;
-      gap: 10px;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
       margin-bottom: 6px;
+      padding: 9px 10px;
       text-align: left;
     }
 
-    .badge {
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 4px 9px;
-      color: var(--muted);
-      font-size: 12px;
+    .project-item strong, .project-item .small {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
       white-space: nowrap;
     }
 
-    .manual {
-      display: grid;
-      gap: 8px;
-      padding: 12px;
-      border-top: 1px solid var(--line);
+    .badge {
+      align-self: center;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 3px 7px;
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
     }
 
-    @media (max-width: 620px) {
-      .app {
-        padding: 8px;
-        gap: 8px;
-      }
+    .drawer-tools {
+      display: grid;
+      gap: 8px;
+      border-top: 1px solid var(--line);
+      border-bottom: 0;
+    }
 
-      .project-row, .send-row, .footer-row {
-        grid-template-columns: 1fr;
-      }
+    .input-action {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 7px;
+    }
 
-      .statuses {
-        font-size: 13px;
-      }
+    .status-popup {
+      position: fixed;
+      top: 60px;
+      right: 10px;
+      z-index: 30;
+      display: none;
+      width: min(310px, calc(100vw - 20px));
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      box-shadow: 0 16px 34px rgba(0, 0, 0, .36);
+      padding: 10px;
+    }
 
-      button {
-        width: 100%;
-      }
+    .status-popup.open { display: grid; gap: 3px; }
+
+    .status-row {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: center;
+      gap: 8px;
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 13px;
+    }
+
+    .toast {
+      position: fixed;
+      right: 12px;
+      bottom: 86px;
+      z-index: 40;
+      display: none;
+      max-width: min(420px, calc(100vw - 24px));
+      border: 1px solid #7d3e3b;
+      border-radius: 10px;
+      background: #402220;
+      color: #ffe7e5;
+      padding: 10px 12px;
+      font-size: 13px;
+    }
+
+    .toast.open { display: block; }
+
+    @media (max-width: 540px) {
+      .topbar { padding-inline: 8px; }
+      .terminal { padding: 11px 9px 17px; }
+      .message { max-width: 95%; }
+      .output pre { font-size: 12px; }
+      .composer-wrap { padding-inline: 7px; }
+      .composer { gap: 6px; }
     }
   </style>
 </head>
 <body>
   <main class="app">
-    <section class="topbar">
-      <div class="brand">
-        <strong>JARVIS</strong>
-        <span>Remote Codex dari HP</span>
+    <header class="topbar">
+      <div class="top-left">
+        <button id="openProjects" class="icon-button" title="Buka project drawer" aria-label="Buka project drawer">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <strong class="brand">JARVIS</strong>
       </div>
-      <div class="statuses">
-        <div><span id="backendDot" class="dot"></span><span id="backendText">offline</span></div>
-        <div><span id="codexDot" class="dot"></span><span id="codexText">codex mati</span></div>
-        <div><span id="whisperDot" class="dot warn"></span><span id="whisperText">whisper loading</span></div>
+      <div class="top-right">
+        <button id="statusButton" class="status-button" title="Lihat status" aria-label="Lihat status">
+          <span id="backendDot" class="dot"></span>
+          <span id="codexDot" class="dot"></span>
+          <span id="whisperDot" class="dot warn"></span>
+        </button>
+      </div>
+    </header>
+
+    <section id="terminal" class="terminal" aria-label="Output Codex">
+      <div id="messages" class="messages">
+        <div id="emptyState" class="empty">Output Codex akan tampil di sini.</div>
       </div>
     </section>
 
-    <section class="projectbar">
-      <div class="small">Project aktif</div>
-      <div class="project-row">
-        <div>
-          <div id="activeProject" class="project-name">Belum ada project</div>
-          <div id="activeProjectMeta" class="project-meta">-</div>
-        </div>
-        <button id="openProjects">Ganti Project</button>
-        <button id="refreshProjects">Refresh</button>
+    <section class="composer-wrap">
+      <div class="composer">
+        <button id="micButton" class="icon-button mic" title="Rekam suara" aria-label="Rekam suara">
+          <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4M9 21h6"/></svg>
+        </button>
+        <textarea id="promptInput" rows="1" placeholder="Ketik perintah atau rekam suara..."></textarea>
+        <button id="sendButton" class="icon-button send" title="Kirim ke Codex" aria-label="Kirim ke Codex">
+          <svg class="icon" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+        </button>
       </div>
-    </section>
-
-    <section class="terminal-wrap">
-      <div class="terminal-head">
-        <span>Output Codex</span>
+      <div class="composer-meta">
+        <label class="toggle"><input id="autoSend" type="checkbox"> Auto-send suara</label>
         <span id="busyText">idle</span>
-      </div>
-      <div id="terminal"></div>
-    </section>
-
-    <section class="controls">
-      <button id="micButton" class="mic">TEKAN UNTUK BICARA</button>
-      <textarea id="transcript" placeholder="Hasil transkripsi atau perintah manual..."></textarea>
-      <div class="send-row">
-        <input id="textInput" placeholder="Ketik cepat lalu Enter">
-        <button id="sendButton" class="send">KIRIM KE CODEX</button>
-      </div>
-      <div class="footer-row">
-        <label class="toggle"><input id="autoSend" type="checkbox"> Auto-send</label>
-        <button id="restartCodex">Restart Codex</button>
       </div>
     </section>
   </main>
 
-  <div id="projectModal" class="modal">
-    <div class="modal-panel">
-      <div class="modal-head">
-        <strong>Pilih Project</strong>
-        <button id="closeProjects">X</button>
+  <div id="projectBackdrop" class="backdrop">
+    <aside class="drawer" aria-label="Project manager">
+      <div class="drawer-head">
+        <strong>Project</strong>
+        <div class="drawer-actions">
+          <button id="refreshProjects" class="icon-button" title="Refresh daftar project" aria-label="Refresh daftar project">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5M4 13a8.1 8.1 0 0 0 15.5 2m.5 5v-5h-5"/></svg>
+          </button>
+          <button id="closeProjects" class="icon-button" title="Tutup drawer" aria-label="Tutup drawer">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
       </div>
-      <div style="padding:12px;border-bottom:1px solid var(--line)">
-        <input id="projectSearch" placeholder="Cari project...">
+      <div class="drawer-active">
+        <div class="label">Project aktif</div>
+        <div id="activeProject" class="active-name">Belum ada project</div>
+        <div id="activeProjectMeta" class="active-path">-</div>
+        <button id="restartCodex" style="width:100%;margin-top:10px">Restart Codex</button>
       </div>
-      <div id="projectList" class="modal-body"></div>
-      <div class="manual">
-        <div class="small">Ketik path manual</div>
-        <input id="manualPath" placeholder="D:\project-lain\nama-project">
-        <button id="addManual">TAMBAH & BUKA</button>
+      <div class="drawer-search">
+        <input id="projectSearch" placeholder="Cari nama atau path project...">
       </div>
-    </div>
+      <div id="projectList" class="project-list"></div>
+      <div class="drawer-tools">
+        <div class="label">Buka path manual</div>
+        <div class="input-action">
+          <input id="manualPath" placeholder="D:\project-lain">
+          <button id="addManual" title="Tambah dan buka">Buka</button>
+        </div>
+        <div class="label">Buat folder dengan command terbatas</div>
+        <div class="input-action">
+          <input id="projectCommand" placeholder='mkdir "D:\_2026\project-baru"'>
+          <button id="runCommand" title="Jalankan mkdir">Run</button>
+        </div>
+      </div>
+    </aside>
   </div>
+
+  <div id="statusPopup" class="status-popup">
+    <div class="status-row"><span id="backendPopupDot" class="dot"></span><span id="backendText">Backend offline</span></div>
+    <div class="status-row"><span id="codexPopupDot" class="dot"></span><span id="codexText">Codex mati</span></div>
+    <div class="status-row"><span id="whisperPopupDot" class="dot warn"></span><span id="whisperText">Whisper loading</span></div>
+  </div>
+  <div id="toast" class="toast"></div>
 
   <script>
     const ansi = new AnsiUp();
     const state = {
       projects: [],
+      entries: [],
       status: null,
       ws: null,
       mediaRecorder: null,
-      chunks: [],
-      rawOutput: ''
+      chunks: []
     };
-
     const el = (id) => document.getElementById(id);
 
-    function api(path, options = {}) {
-      return fetch(path, {
-        headers: options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' },
-        ...options
-      }).then(async (res) => {
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.detail || 'Request gagal');
-        return data;
-      });
+    async function api(path, options = {}) {
+      const headers = options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' };
+      const response = await fetch(path, { ...options, headers: { ...headers, ...(options.headers || {}) } });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || 'Request gagal');
+      return data;
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+      })[char]);
+    }
+
+    function showError(error) {
+      el('toast').textContent = error.message || String(error);
+      el('toast').classList.add('open');
+      clearTimeout(window.toastTimer);
+      window.toastTimer = setTimeout(() => el('toast').classList.remove('open'), 4500);
+    }
+
+    function renderMessages() {
+      const messages = el('messages');
+      messages.innerHTML = state.entries.length ? state.entries.map((entry) => {
+        if (entry.type === 'user') return `<div class="message user">${escapeHtml(entry.text)}</div>`;
+        return `<div class="message output"><pre>${ansi.ansi_to_html(entry.text)}</pre></div>`;
+      }).join('') : '<div class="empty">Output Codex akan tampil di sini.</div>';
+      el('terminal').scrollTop = el('terminal').scrollHeight;
+    }
+
+    function appendOutput(text) {
+      const last = state.entries[state.entries.length - 1];
+      if (last && last.type === 'output') last.text += text;
+      else state.entries.push({ type: 'output', text });
+
+      let outputLength = state.entries.reduce((sum, entry) => sum + entry.text.length, 0);
+      while (outputLength > 160000 && state.entries.length > 1) {
+        outputLength -= state.entries.shift().text.length;
+      }
+      renderMessages();
+      setBusy(text.trim() ? 'memproses...' : 'idle');
+      clearTimeout(window.busyTimer);
+      window.busyTimer = setTimeout(() => setBusy('idle'), 2500);
+    }
+
+    function appendUser(text) {
+      state.entries.push({ type: 'user', text });
+      renderMessages();
+    }
+
+    function clearOutput() {
+      state.entries = [];
+      renderMessages();
+    }
+
+    function setBusy(text) { el('busyText').textContent = text; }
+
+    function setDot(id, stateName) {
+      el(id).className = `dot ${stateName || ''}`.trim();
+    }
+
+    function setBackend(online) {
+      setDot('backendDot', online ? 'ok' : '');
+      setDot('backendPopupDot', online ? 'ok' : '');
+      el('backendText').textContent = online ? 'Backend online' : 'Backend offline';
     }
 
     function connectWs() {
       const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
       state.ws = new WebSocket(`${protocol}//${location.host}/ws/output`);
-
       state.ws.onmessage = (event) => appendOutput(event.data);
       state.ws.onopen = () => setBackend(true);
       state.ws.onclose = () => {
@@ -416,35 +571,16 @@
       };
     }
 
-    function appendOutput(text) {
-      state.rawOutput += text;
-      if (state.rawOutput.length > 160000) state.rawOutput = state.rawOutput.slice(-120000);
-      el('terminal').innerHTML = ansi.ansi_to_html(state.rawOutput);
-      el('terminal').scrollTop = el('terminal').scrollHeight;
-      el('busyText').textContent = text.trim() ? 'memproses...' : 'idle';
-      clearTimeout(window.busyTimer);
-      window.busyTimer = setTimeout(() => el('busyText').textContent = 'idle', 2500);
-    }
-
-    function clearOutput() {
-      state.rawOutput = '';
-      el('terminal').innerHTML = '';
-    }
-
-    function setBackend(online) {
-      el('backendDot').className = `dot ${online ? 'ok' : ''}`;
-      el('backendText').textContent = online ? 'backend online' : 'backend offline';
-    }
-
     async function loadStatus() {
       try {
         const status = await api('/api/status');
         state.status = status;
         setBackend(true);
-        el('codexDot').className = `dot ${status.codex.running ? 'ok' : ''}`;
-        el('codexText').textContent = status.codex.busy ? 'codex memproses' : (status.codex.running ? 'codex ready' : 'codex mati');
+        const codexState = status.codex.running ? 'ok' : '';
+        setDot('codexDot', codexState);
+        setDot('codexPopupDot', codexState);
+        el('codexText').textContent = status.codex.busy ? 'Codex sedang memproses' : (status.codex.running ? 'Codex ready' : 'Codex mati');
         updateWhisperStatus(status.whisper);
-
         const project = status.active_project;
         el('activeProject').textContent = project ? project.name : 'Belum ada project';
         el('activeProjectMeta').textContent = project ? `${project.type} - ${project.path}` : status.codex.error || '-';
@@ -454,20 +590,14 @@
     }
 
     function updateWhisperStatus(whisper) {
-      if (whisper.loaded) {
-        el('whisperDot').className = 'dot ok';
-        el('whisperText').textContent = `whisper ready (${whisper.model_size || '-'})`;
-        return;
-      }
-
-      if (whisper.loading) {
-        el('whisperDot').className = 'dot warn';
-        el('whisperText').textContent = `whisper loading (${whisper.model_size || '-'})`;
-        return;
-      }
-
-      el('whisperDot').className = 'dot';
-      el('whisperText').textContent = whisper.error ? 'whisper error' : 'whisper belum siap';
+      const stateName = whisper.loaded ? 'ok' : (whisper.loading ? 'warn' : '');
+      setDot('whisperDot', stateName);
+      setDot('whisperPopupDot', stateName);
+      el('whisperText').textContent = whisper.loaded
+        ? `Whisper ready (${whisper.model_size || '-'})`
+        : whisper.loading
+          ? `Whisper loading (${whisper.model_size || '-'})`
+          : whisper.error ? `Whisper error: ${whisper.error}` : 'Whisper belum siap';
     }
 
     async function loadProjects() {
@@ -477,14 +607,13 @@
     }
 
     function renderProjects() {
-      const q = el('projectSearch').value.trim().toLowerCase();
-      const filtered = state.projects.filter((p) => {
-        return !q || `${p.name} ${p.path} ${p.type}`.toLowerCase().includes(q);
-      });
+      const query = el('projectSearch').value.trim().toLowerCase();
+      const filtered = state.projects.filter((project) =>
+        !query || `${project.name} ${project.path} ${project.type}`.toLowerCase().includes(query)
+      );
       const groups = filtered.reduce((acc, project) => {
         const key = project.root || 'custom';
-        acc[key] = acc[key] || [];
-        acc[key].push(project);
+        (acc[key] ||= []).push(project);
         return acc;
       }, {});
 
@@ -493,10 +622,7 @@
           <div class="group-title">${escapeHtml(root)}</div>
           ${items.map((project) => `
             <button class="project-item" data-path="${escapeHtml(project.path)}">
-              <span>
-                <strong>${escapeHtml(project.name)}</strong><br>
-                <span class="small">${escapeHtml(project.path)}</span>
-              </span>
+              <span><strong>${escapeHtml(project.name)}</strong><span class="small">${escapeHtml(project.path)}</span></span>
               <span class="badge">${escapeHtml(project.type)}</span>
             </button>
           `).join('')}
@@ -504,73 +630,22 @@
       `).join('') || '<div class="small">Project tidak ditemukan.</div>';
 
       document.querySelectorAll('.project-item').forEach((button) => {
-        button.addEventListener('click', () => switchProject(button.dataset.path));
+        button.addEventListener('click', () => switchProject(button.dataset.path).catch(showError));
       });
     }
 
     async function switchProject(path) {
       clearOutput();
       await api('/api/switch-project', { method: 'POST', body: JSON.stringify({ path }) });
-      closeModal();
+      closeDrawer();
       await loadStatus();
     }
 
     async function refreshProjects() {
-      const data = await api('/api/projects/refresh', { method: 'POST', body: JSON.stringify({}) });
+      const data = await api('/api/projects/refresh', { method: 'POST', body: '{}' });
       state.projects = data.projects || [];
       renderProjects();
       await loadStatus();
-    }
-
-    async function sendText(text) {
-      const clean = text.trim();
-      if (!clean) return;
-      await api('/api/send', { method: 'POST', body: JSON.stringify({ text: clean }) });
-      el('textInput').value = '';
-    }
-
-    async function startRecording() {
-      if (state.mediaRecorder && state.mediaRecorder.state === 'recording') {
-        state.mediaRecorder.stop();
-        return;
-      }
-
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('Mic browser hanya tersedia lewat HTTPS atau localhost. Buka Jarvis memakai URL HTTPS, misalnya melalui Tailscale Serve.');
-      }
-
-      if (!window.MediaRecorder) {
-        throw new Error('Browser ini tidak mendukung perekaman audio MediaRecorder. Coba Chrome, Edge, atau Safari versi terbaru.');
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      state.chunks = [];
-      state.mediaRecorder = new MediaRecorder(stream);
-      state.mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) state.chunks.push(event.data);
-      };
-      state.mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach((track) => track.stop());
-        el('micButton').classList.remove('recording');
-        el('micButton').textContent = 'TEKAN UNTUK BICARA';
-        await uploadAudio();
-      };
-      state.mediaRecorder.start();
-      el('micButton').classList.add('recording');
-      el('micButton').textContent = 'STOP REKAMAN';
-    }
-
-    async function uploadAudio() {
-      const blob = new Blob(state.chunks, { type: 'audio/webm' });
-      const form = new FormData();
-      form.append('file', blob, 'voice.webm');
-      el('busyText').textContent = 'transkripsi...';
-
-      const endpoint = el('autoSend').checked ? '/api/transcribe-and-send' : '/api/transcribe';
-      const data = await api(endpoint, { method: 'POST', body: form });
-      el('transcript').value = data.text || '';
-      if (el('autoSend').checked && data.sent === false) appendOutput('[JARVIS] Transkripsi selesai, tapi Codex belum running.\n');
-      el('busyText').textContent = 'idle';
     }
 
     async function addManualProject() {
@@ -581,52 +656,120 @@
       await switchProject(path);
     }
 
-    function escapeHtml(value) {
-      return String(value).replace(/[&<>"']/g, (char) => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#039;'
-      })[char]);
-    }
-
-    function openModal() {
-      el('projectModal').classList.add('open');
+    async function runProjectCommand() {
+      const text = el('projectCommand').value.trim();
+      if (!text) return;
+      const data = await api('/api/projects/command', { method: 'POST', body: JSON.stringify({ text }) });
+      state.projects = data.projects || [];
+      el('projectCommand').value = '';
       renderProjects();
+      await switchProject(data.project.path);
     }
 
-    function closeModal() {
-      el('projectModal').classList.remove('open');
+    async function sendPrompt() {
+      const input = el('promptInput');
+      const text = input.value.trim();
+      if (!text) return;
+      appendUser(text);
+      input.value = '';
+      resizePrompt();
+      try {
+        await api('/api/send', { method: 'POST', body: JSON.stringify({ text }) });
+      } catch (error) {
+        appendOutput(`[JARVIS] ${error.message}\n`);
+        showError(error);
+      }
     }
 
-    el('openProjects').addEventListener('click', openModal);
-    el('closeProjects').addEventListener('click', closeModal);
-    el('projectModal').addEventListener('click', (event) => {
-      if (event.target === el('projectModal')) closeModal();
+    async function toggleRecording() {
+      if (state.mediaRecorder && state.mediaRecorder.state === 'recording') {
+        state.mediaRecorder.stop();
+        return;
+      }
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error('Mic perlu HTTPS atau localhost. Gunakan URL HTTPS untuk akses dari HP.');
+      if (!window.MediaRecorder) throw new Error('Browser ini tidak mendukung MediaRecorder.');
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      state.chunks = [];
+      state.mediaRecorder = new MediaRecorder(stream);
+      state.mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) state.chunks.push(event.data);
+      };
+      state.mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+        el('micButton').classList.remove('recording');
+        try { await uploadAudio(); } catch (error) { showError(error); }
+      };
+      state.mediaRecorder.start();
+      el('micButton').classList.add('recording');
+    }
+
+    async function uploadAudio() {
+      const form = new FormData();
+      form.append('file', new Blob(state.chunks, { type: 'audio/webm' }), 'voice.webm');
+      setBusy('transkripsi...');
+      const autoSend = el('autoSend').checked;
+      const data = await api(autoSend ? '/api/transcribe-and-send' : '/api/transcribe', { method: 'POST', body: form });
+      el('promptInput').value = data.text || '';
+      resizePrompt();
+      if (autoSend && data.text) {
+        appendUser(data.text);
+        el('promptInput').value = '';
+        resizePrompt();
+      }
+      if (autoSend && data.sent === false) appendOutput('[JARVIS] Transkripsi selesai, tetapi Codex belum siap.\n');
+      setBusy('idle');
+    }
+
+    function resizePrompt() {
+      const input = el('promptInput');
+      input.style.height = 'auto';
+      input.style.height = `${Math.min(input.scrollHeight, 132)}px`;
+    }
+
+    function openDrawer() { el('projectBackdrop').classList.add('open'); }
+    function closeDrawer() { el('projectBackdrop').classList.remove('open'); }
+
+    el('openProjects').addEventListener('click', openDrawer);
+    el('closeProjects').addEventListener('click', closeDrawer);
+    el('projectBackdrop').addEventListener('click', (event) => {
+      if (event.target === el('projectBackdrop')) closeDrawer();
+    });
+    el('statusButton').addEventListener('click', () => el('statusPopup').classList.toggle('open'));
+    document.addEventListener('click', (event) => {
+      if (!el('statusButton').contains(event.target) && !el('statusPopup').contains(event.target)) el('statusPopup').classList.remove('open');
     });
     el('projectSearch').addEventListener('input', renderProjects);
-    el('refreshProjects').addEventListener('click', refreshProjects);
-    el('addManual').addEventListener('click', addManualProject);
+    el('refreshProjects').addEventListener('click', () => refreshProjects().catch(showError));
+    el('addManual').addEventListener('click', () => addManualProject().catch(showError));
+    el('manualPath').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') addManualProject().catch(showError);
+    });
+    el('runCommand').addEventListener('click', () => runProjectCommand().catch(showError));
+    el('projectCommand').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') runProjectCommand().catch(showError);
+    });
     el('restartCodex').addEventListener('click', async () => {
       clearOutput();
-      await api('/api/restart-codex', { method: 'POST', body: JSON.stringify({}) });
-      await loadStatus();
+      try {
+        await api('/api/restart-codex', { method: 'POST', body: '{}' });
+        closeDrawer();
+        await loadStatus();
+      } catch (error) { showError(error); }
     });
-    el('sendButton').addEventListener('click', () => sendText(el('transcript').value || el('textInput').value));
-    el('textInput').addEventListener('keydown', (event) => {
+    el('sendButton').addEventListener('click', sendPrompt);
+    el('promptInput').addEventListener('input', resizePrompt);
+    el('promptInput').addEventListener('keydown', (event) => {
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
-        sendText(el('textInput').value);
+        sendPrompt();
       }
     });
-    el('micButton').addEventListener('click', () => {
-      startRecording().catch((error) => appendOutput(`[JARVIS] Mic error: ${error.message}\n`));
-    });
+    el('micButton').addEventListener('click', () => toggleRecording().catch(showError));
 
     connectWs();
     loadStatus();
-    loadProjects();
+    loadProjects().catch(showError);
     setInterval(loadStatus, 5000);
   </script>
 </body>

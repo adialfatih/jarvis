@@ -116,6 +116,15 @@ async def add_custom_project(payload: PathPayload):
     return {"project": project, "projects": projects.projects}
 
 
+@app.post("/api/projects/command")
+async def run_project_command(payload: TextPayload):
+    try:
+        project = projects.run_command(payload.text)
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"project": project, "projects": projects.projects}
+
+
 @app.post("/api/switch-project")
 async def switch_project(payload: PathPayload):
     project = projects.set_active(payload.path)
