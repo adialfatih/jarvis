@@ -240,12 +240,20 @@
     .backdrop {
       position: fixed;
       inset: 0;
-      display: none;
       background: rgba(0, 0, 0, .56);
       z-index: 20;
+      opacity: 0;
+      pointer-events: none;
+      visibility: hidden;
+      transition: opacity .22s ease, visibility 0s linear .22s;
     }
 
-    .backdrop.open { display: block; }
+    .backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+      visibility: visible;
+      transition-delay: 0s;
+    }
 
     .drawer {
       width: min(92vw, 440px);
@@ -255,7 +263,11 @@
       border-right: 1px solid var(--line);
       background: var(--panel);
       box-shadow: 12px 0 32px rgba(0, 0, 0, .28);
+      transform: translateX(-100%);
+      transition: transform .28s cubic-bezier(.22, 1, .36, 1);
     }
+
+    .backdrop.open .drawer { transform: translateX(0); }
 
     .drawer-head, .drawer-active, .drawer-search, .drawer-tools {
       padding: 12px;
@@ -393,6 +405,10 @@
       .composer-wrap { padding-inline: 7px; }
       .composer { gap: 6px; }
     }
+
+    @media (prefers-reduced-motion: reduce) {
+      .backdrop, .drawer { transition: none; }
+    }
   </style>
 </head>
 <body>
@@ -436,7 +452,7 @@
     </section>
   </main>
 
-  <div id="projectBackdrop" class="backdrop">
+  <div id="projectBackdrop" class="backdrop" aria-hidden="true">
     <aside class="drawer" aria-label="Project manager">
       <div class="drawer-head">
         <strong>Project</strong>
@@ -727,13 +743,23 @@
       input.style.height = `${Math.min(input.scrollHeight, 132)}px`;
     }
 
-    function openDrawer() { el('projectBackdrop').classList.add('open'); }
-    function closeDrawer() { el('projectBackdrop').classList.remove('open'); }
+    function openDrawer() {
+      el('projectBackdrop').classList.add('open');
+      el('projectBackdrop').setAttribute('aria-hidden', 'false');
+    }
+
+    function closeDrawer() {
+      el('projectBackdrop').classList.remove('open');
+      el('projectBackdrop').setAttribute('aria-hidden', 'true');
+    }
 
     el('openProjects').addEventListener('click', openDrawer);
     el('closeProjects').addEventListener('click', closeDrawer);
     el('projectBackdrop').addEventListener('click', (event) => {
       if (event.target === el('projectBackdrop')) closeDrawer();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && el('projectBackdrop').classList.contains('open')) closeDrawer();
     });
     el('statusButton').addEventListener('click', () => el('statusPopup').classList.toggle('open'));
     document.addEventListener('click', (event) => {
