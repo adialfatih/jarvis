@@ -1,0 +1,48 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# Local Codex instructions and machine-specific notes
+AGENTS.md
+
+# Python environments and generated files
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+.python-version
+
+# Test, lint, and coverage caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Temporary audio uploads and local Whisper model files
+*.wav
+*.webm
+*.mp3
+*.m4a
+*.ogg
+whisper-models/
+models/
+tmp/
+temp/
+
+# Logs and runtime files
+*.log
+*.pid
+
+# Editor and OS files
+.idea/
+.vscode/
+*.code-workspace
+.DS_Store
+Thumbs.db
+desktop.ini
+

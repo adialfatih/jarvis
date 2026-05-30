@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jarvis Remote Codex</title>
+  <script src="https://cdn.jsdelivr.net/npm/ansi_up@5/ansi_up.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101214;
+      --panel: #181b1f;
+      --panel-2: #20242a;
+      --line: #323943;
+      --text: #f0f3f6;
+      --muted: #9aa4af;
+      --accent: #2fbf71;
+      --danger: #ff5f57;
+      --warn: #f4b942;
+      --blue: #58a6ff;
+      --terminal: #07090b;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, Segoe UI, system-ui, -apple-system, sans-serif;
+    }
+
+    button, input, textarea, select {
+      font: inherit;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--text);
+      min-height: 44px;
+      border-radius: 8px;
+      padding: 0 14px;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+    }
+
+    input, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #0c0e11;
+      color: var(--text);
+      border-radius: 8px;
+      padding: 12px;
+      outline: none;
+    }
+
+    textarea {
+      min-height: 92px;
+      resize: vertical;
+    }
+
+    .app {
+      width: min(100%, 920px);
+      min-height: 100vh;
+      margin: 0 auto;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      padding: 10px;
+    }
+
+    .topbar, .projectbar, .controls {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .brand strong {
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    .brand span, .project-meta, .small {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .statuses {
+      display: grid;
+      gap: 6px;
+      justify-items: end;
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      display: inline-block;
+      border-radius: 50%;
+      margin-right: 7px;
+      background: var(--danger);
+    }
+
+    .dot.ok { background: var(--accent); }
+    .dot.warn { background: var(--warn); }
+
+    .project-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: center;
+      margin-top: 8px;
+    }
+
+    .project-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 700;
+    }
+
+    .terminal-wrap {
+      min-height: 260px;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .terminal-head {
+      min-height: 42px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+      text-transform: uppercase;
+    }
+
+    #terminal {
+      background: var(--terminal);
+      color: #e7edf3;
+      font-family: Consolas, "Cascadia Mono", monospace;
+      font-size: 13px;
+      line-height: 1.45;
+      overflow-y: auto;
+      padding: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .controls {
+      display: grid;
+      gap: 10px;
+    }
+
+    .mic {
+      min-height: 70px;
+      background: #1b5e3a;
+      border-color: #288b58;
+      font-weight: 800;
+      font-size: 17px;
+    }
+
+    .mic.recording {
+      background: #7f1d1d;
+      border-color: #ef4444;
+    }
+
+    .send-row, .footer-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .send {
+      background: #17406f;
+      border-color: #2869ad;
+      font-weight: 700;
+    }
+
+    .toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      user-select: none;
+    }
+
+    .toggle input {
+      width: 18px;
+      height: 18px;
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      background: rgba(0, 0, 0, .65);
+      padding: 14px;
+      z-index: 20;
+    }
+
+    .modal.open {
+      display: grid;
+      place-items: center;
+    }
+
+    .modal-panel {
+      width: min(100%, 760px);
+      max-height: calc(100vh - 28px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .modal-body {
+      overflow: auto;
+      padding: 12px;
+    }
+
+    .group {
+      margin: 14px 0;
+    }
+
+    .group-title {
+      color: var(--blue);
+      font-size: 13px;
+      margin-bottom: 7px;
+      word-break: break-all;
+    }
+
+    .project-item {
+      width: 100%;
+      min-height: 50px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 6px;
+      text-align: left;
+    }
+
+    .badge {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 9px;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .manual {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      border-top: 1px solid var(--line);
+    }
+
+    @media (max-width: 620px) {
+      .app {
+        padding: 8px;
+        gap: 8px;
+      }
+
+      .project-row, .send-row, .footer-row {
+        grid-template-columns: 1fr;
+      }
+
+      .statuses {
+        font-size: 13px;
+      }
+
+      button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="topbar">
+      <div class="brand">
+        <strong>JARVIS</strong>
+        <span>Remote Codex dari HP</span>
+      </div>
+      <div class="statuses">
+        <div><span id="backendDot" class="dot"></span><span id="backendText">offline</span></div>
+        <div><span id="codexDot" class="dot"></span><span id="codexText">codex mati</span></div>
+        <div><span id="whisperDot" class="dot warn"></span><span id="whisperText">whisper loading</span></div>
+      </div>
+    </section>
+
+    <section class="projectbar">
+      <div class="small">Project aktif</div>
+      <div class="project-row">
+        <div>
+          <div id="activeProject" class="project-name">Belum ada project</div>
+          <div id="activeProjectMeta" class="project-meta">-</div>
+        </div>
+        <button id="openProjects">Ganti Project</button>
+        <button id="refreshProjects">Refresh</button>
+      </div>
+    </section>
+
+    <section class="terminal-wrap">
+      <div class="terminal-head">
+        <span>Output Codex</span>
+        <span id="busyText">idle</span>
+      </div>
+      <div id="terminal"></div>
+    </section>
+
+    <section class="controls">
+      <button id="micButton" class="mic">TEKAN UNTUK BICARA</button>
+      <textarea id="transcript" placeholder="Hasil transkripsi atau perintah manual..."></textarea>
+      <div class="send-row">
+        <input id="textInput" placeholder="Ketik cepat lalu Enter">
+        <button id="sendButton" class="send">KIRIM KE CODEX</button>
+      </div>
+      <div class="footer-row">
+        <label class="toggle"><input id="autoSend" type="checkbox"> Auto-send</label>
+        <button id="restartCodex">Restart Codex</button>
+      </div>
+    </section>
+  </main>
+
+  <div id="projectModal" class="modal">
+    <div class="modal-panel">
+      <div class="modal-head">
+        <strong>Pilih Project</strong>
+        <button id="closeProjects">X</button>
+      </div>
+      <div style="padding:12px;border-bottom:1px solid var(--line)">
+        <input id="projectSearch" placeholder="Cari project...">
+      </div>
+      <div id="projectList" class="modal-body"></div>
+      <div class="manual">
+        <div class="small">Ketik path manual</div>
+        <input id="manualPath" placeholder="D:\project-lain\nama-project">
+        <button id="addManual">TAMBAH & BUKA</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const ansi = new AnsiUp();
+    const state = {
+      projects: [],
+      status: null,
+      ws: null,
+      mediaRecorder: null,
+      chunks: [],
+      rawOutput: ''
+    };
+
+    const el = (id) => document.getElementById(id);
+
+    function api(path, options = {}) {
+      return fetch(path, {
+        headers: options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' },
+        ...options
+      }).then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || 'Request gagal');
+        return data;
+      });
+    }
+
+    function connectWs() {
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      state.ws = new WebSocket(`${protocol}//${location.host}/ws/output`);
+
+      state.ws.onmessage = (event) => appendOutput(event.data);
+      state.ws.onopen = () => setBackend(true);
+      state.ws.onclose = () => {
+        setBackend(false);
+        setTimeout(connectWs, 3000);
+      };
+    }
+
+    function appendOutput(text) {
+      state.rawOutput += text;
+      if (state.rawOutput.length > 160000) state.rawOutput = state.rawOutput.slice(-120000);
+      el('terminal').innerHTML = ansi.ansi_to_html(state.rawOutput);
+      el('terminal').scrollTop = el('terminal').scrollHeight;
+      el('busyText').textContent = text.trim() ? 'memproses...' : 'idle';
+      clearTimeout(window.busyTimer);
+      window.busyTimer = setTimeout(() => el('busyText').textContent = 'idle', 2500);
+    }
+
+    function clearOutput() {
+      state.rawOutput = '';
+      el('terminal').innerHTML = '';
+    }
+
+    function setBackend(online) {
+      el('backendDot').className = `dot ${online ? 'ok' : ''}`;
+      el('backendText').textContent = online ? 'backend online' : 'backend offline';
+    }
+
+    async function loadStatus() {
+      try {
+        const status = await api('/api/status');
+        state.status = status;
+        setBackend(true);
+        el('codexDot').className = `dot ${status.codex.running ? 'ok' : ''}`;
+        el('codexText').textContent = status.codex.busy ? 'codex memproses' : (status.codex.running ? 'codex ready' : 'codex mati');
+        updateWhisperStatus(status.whisper);
+
+        const project = status.active_project;
+        el('activeProject').textContent = project ? project.name : 'Belum ada project';
+        el('activeProjectMeta').textContent = project ? `${project.type} - ${project.path}` : status.codex.error || '-';
+      } catch (error) {
+        setBackend(false);
+      }
+    }
+
+    function updateWhisperStatus(whisper) {
+      if (whisper.loaded) {
+        el('whisperDot').className = 'dot ok';
+        el('whisperText').textContent = `whisper ready (${whisper.model_size || '-'})`;
+        return;
+      }
+
+      if (whisper.loading) {
+        el('whisperDot').className = 'dot warn';
+        el('whisperText').textContent = `whisper loading (${whisper.model_size || '-'})`;
+        return;
+      }
+
+      el('whisperDot').className = 'dot';
+      el('whisperText').textContent = whisper.error ? 'whisper error' : 'whisper belum siap';
+    }
+
+    async function loadProjects() {
+      const data = await api('/api/projects');
+      state.projects = data.projects || [];
+      renderProjects();
+    }
+
+    function renderProjects() {
+      const q = el('projectSearch').value.trim().toLowerCase();
+      const filtered = state.projects.filter((p) => {
+        return !q || `${p.name} ${p.path} ${p.type}`.toLowerCase().includes(q);
+      });
+      const groups = filtered.reduce((acc, project) => {
+        const key = project.root || 'custom';
+        acc[key] = acc[key] || [];
+        acc[key].push(project);
+        return acc;
+      }, {});
+
+      el('projectList').innerHTML = Object.entries(groups).map(([root, items]) => `
+        <div class="group">
+          <div class="group-title">${escapeHtml(root)}</div>
+          ${items.map((project) => `
+            <button class="project-item" data-path="${escapeHtml(project.path)}">
+              <span>
+                <strong>${escapeHtml(project.name)}</strong><br>
+                <span class="small">${escapeHtml(project.path)}</span>
+              </span>
+              <span class="badge">${escapeHtml(project.type)}</span>
+            </button>
+          `).join('')}
+        </div>
+      `).join('') || '<div class="small">Project tidak ditemukan.</div>';
+
+      document.querySelectorAll('.project-item').forEach((button) => {
+        button.addEventListener('click', () => switchProject(button.dataset.path));
+      });
+    }
+
+    async function switchProject(path) {
+      clearOutput();
+      await api('/api/switch-project', { method: 'POST', body: JSON.stringify({ path }) });
+      closeModal();
+      await loadStatus();
+    }
+
+    async function refreshProjects() {
+      const data = await api('/api/projects/refresh', { method: 'POST', body: JSON.stringify({}) });
+      state.projects = data.projects || [];
+      renderProjects();
+      await loadStatus();
+    }
+
+    async function sendText(text) {
+      const clean = text.trim();
+      if (!clean) return;
+      await api('/api/send', { method: 'POST', body: JSON.stringify({ text: clean }) });
+      el('textInput').value = '';
+    }
+
+    async function startRecording() {
+      if (state.mediaRecorder && state.mediaRecorder.state === 'recording') {
+        state.mediaRecorder.stop();
+        return;
+      }
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Mic browser hanya tersedia lewat HTTPS atau localhost. Buka Jarvis memakai URL HTTPS, misalnya melalui Tailscale Serve.');
+      }
+
+      if (!window.MediaRecorder) {
+        throw new Error('Browser ini tidak mendukung perekaman audio MediaRecorder. Coba Chrome, Edge, atau Safari versi terbaru.');
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      state.chunks = [];
+      state.mediaRecorder = new MediaRecorder(stream);
+      state.mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) state.chunks.push(event.data);
+      };
+      state.mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+        el('micButton').classList.remove('recording');
+        el('micButton').textContent = 'TEKAN UNTUK BICARA';
+        await uploadAudio();
+      };
+      state.mediaRecorder.start();
+      el('micButton').classList.add('recording');
+      el('micButton').textContent = 'STOP REKAMAN';
+    }
+
+    async function uploadAudio() {
+      const blob = new Blob(state.chunks, { type: 'audio/webm' });
+      const form = new FormData();
+      form.append('file', blob, 'voice.webm');
+      el('busyText').textContent = 'transkripsi...';
+
+      const endpoint = el('autoSend').checked ? '/api/transcribe-and-send' : '/api/transcribe';
+      const data = await api(endpoint, { method: 'POST', body: form });
+      el('transcript').value = data.text || '';
+      if (el('autoSend').checked && data.sent === false) appendOutput('[JARVIS] Transkripsi selesai, tapi Codex belum running.\n');
+      el('busyText').textContent = 'idle';
+    }
+
+    async function addManualProject() {
+      const path = el('manualPath').value.trim();
+      if (!path) return;
+      await api('/api/projects/custom', { method: 'POST', body: JSON.stringify({ path }) });
+      await loadProjects();
+      await switchProject(path);
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+      })[char]);
+    }
+
+    function openModal() {
+      el('projectModal').classList.add('open');
+      renderProjects();
+    }
+
+    function closeModal() {
+      el('projectModal').classList.remove('open');
+    }
+
+    el('openProjects').addEventListener('click', openModal);
+    el('closeProjects').addEventListener('click', closeModal);
+    el('projectModal').addEventListener('click', (event) => {
+      if (event.target === el('projectModal')) closeModal();
+    });
+    el('projectSearch').addEventListener('input', renderProjects);
+    el('refreshProjects').addEventListener('click', refreshProjects);
+    el('addManual').addEventListener('click', addManualProject);
+    el('restartCodex').addEventListener('click', async () => {
+      clearOutput();
+      await api('/api/restart-codex', { method: 'POST', body: JSON.stringify({}) });
+      await loadStatus();
+    });
+    el('sendButton').addEventListener('click', () => sendText(el('transcript').value || el('textInput').value));
+    el('textInput').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendText(el('textInput').value);
+      }
+    });
+    el('micButton').addEventListener('click', () => {
+      startRecording().catch((error) => appendOutput(`[JARVIS] Mic error: ${error.message}\n`));
+    });
+
+    connectWs();
+    loadStatus();
+    loadProjects();
+    setInterval(loadStatus, 5000);
+  </script>
+</body>
+</html>
