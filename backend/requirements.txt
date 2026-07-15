@@ -1,7 +1,11 @@
 fastapi
 uvicorn[standard]
 python-multipart
-faster-whisper
 python-dotenv
 pydantic
 websockets
+httpx
+claude-agent-sdk
+ptyprocess; sys_platform != "win32"
+pywinpty; sys_platform == "win32"
+faster-whisper

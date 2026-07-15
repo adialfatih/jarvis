@@ -3,4 +3,5 @@ echo ===========================
 echo  Starting Jarvis...
 echo ===========================
 cd /d "%~dp0backend"
-uvicorn main:app --host 0.0.0.0 --port 8000
+if "%JARVIS_PORT%"=="" set JARVIS_PORT=8300
+uvicorn main:app --host 0.0.0.0 --port %JARVIS_PORT%

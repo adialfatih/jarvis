@@ -22,9 +22,12 @@ echo  Setup selesai!
 echo ===========================
 echo.
 echo Langkah selanjutnya:
-echo 1. Edit backend\.env jika perlu ubah CODEX_DEFAULT_PROJECT
+echo 1. Copy backend\.env.example jadi backend\.env lalu isi:
+echo    - JARVIS_AUTH_TOKEN (token rahasia)
+echo    - TELEGRAM_BOT_TOKEN bot BARU khusus mesin ini (1 bot per mesin!)
+echo    - PROJECT_ROOTS
 echo 2. Jalankan start.bat
-echo 3. Buka browser HP: http://[IP_LAPTOP]:8000
-echo    Cari IP laptop dengan: ipconfig
+echo 3. Di app HP, tambah mesin: http://[IP_TAILSCALE_LAPTOP]:8300 + token
+echo    Cek IP Tailscale dengan: tailscale ip -4
 echo.
 pause

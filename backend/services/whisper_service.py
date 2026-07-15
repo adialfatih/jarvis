@@ -1,7 +1,5 @@
 import os
 
-from faster_whisper import WhisperModel
-
 
 class WhisperService:
     def __init__(self):
@@ -20,6 +18,8 @@ class WhisperService:
         self.is_loading = True
 
         try:
+            from faster_whisper import WhisperModel
+
             self.model = WhisperModel(
                 model_size,
                 device="cpu",

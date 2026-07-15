@@ -2,11 +2,7 @@ import os
 import re
 from pathlib import Path
 
-
-PROJECT_ROOTS = [
-    r"C:\xampp\htdocs",
-    r"D:\_2026",
-]
+import config
 
 
 class ProjectService:
@@ -19,7 +15,7 @@ class ProjectService:
         found: list[dict] = []
         seen: set[str] = set()
 
-        for root in PROJECT_ROOTS:
+        for root in config.project_roots():
             root_path = Path(root)
             if not root_path.exists():
                 continue

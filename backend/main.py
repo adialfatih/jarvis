@@ -1,25 +1,38 @@
 import asyncio
+import hmac
 import os
 import tempfile
 from pathlib import Path
 
-from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    Depends,
+    FastAPI,
+    File,
+    HTTPException,
+    Query,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
-from services.codex_service import CodexService
+import config
+from services import db
+from services.chat_service import ChatManager, ChatSession, sdk_available
 from services.project_service import ProjectService
+from services.session_manager import Session, SessionManager, engines_available
+from services.telegram_service import TelegramService
 from services.whisper_service import WhisperService
 
 
 BASE_DIR = Path(__file__).resolve().parent
 FRONTEND_FILE = BASE_DIR.parent / "frontend" / "index.html"
 
-load_dotenv(BASE_DIR / ".env")
-
-app = FastAPI(title="Jarvis Codex Remote")
+app = FastAPI(title="Jarvis Agent")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -29,9 +42,32 @@ app.add_middleware(
 )
 
 projects = ProjectService()
-codex = CodexService()
+sessions = SessionManager()
+chats = ChatManager()
 whisper = WhisperService()
+telegram = TelegramService(config.TELEGRAM_BOT_TOKEN, config.TELEGRAM_CHAT_ID, config.MACHINE_NAME)
 
+
+# ---------- Auth ----------
+
+bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def require_auth(credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme)):
+    if not config.AUTH_TOKEN:
+        raise HTTPException(status_code=500, detail="JARVIS_AUTH_TOKEN belum diset di backend/.env")
+    if not credentials or not hmac.compare_digest(credentials.credentials, config.AUTH_TOKEN):
+        raise HTTPException(status_code=401, detail="Token salah atau tidak ada")
+
+
+def ws_token_valid(token: str) -> bool:
+    return bool(config.AUTH_TOKEN) and hmac.compare_digest(token, config.AUTH_TOKEN)
+
+
+api = APIRouter(prefix="/api", dependencies=[Depends(require_auth)])
+
+
+# ---------- Payload models ----------
 
 class PathPayload(BaseModel):
     path: str
@@ -41,35 +77,156 @@ class TextPayload(BaseModel):
     text: str
 
 
+class CreateSessionPayload(BaseModel):
+    engine: str
+    path: str
+    cols: int = 80
+    rows: int = 24
+
+
+class InputPayload(BaseModel):
+    text: str = ""
+    enter: bool = True
+
+
+class KeyPayload(BaseModel):
+    key: str
+
+
+class ResizePayload(BaseModel):
+    cols: int
+    rows: int
+
+
+class CreateChatPayload(BaseModel):
+    path: str = ""
+    resume_id: str = ""
+
+
+class PermissionPayload(BaseModel):
+    request_id: str
+    decision: str  # allow | deny | allow_always
+    message: str = ""
+
+
+class AutoAllowPayload(BaseModel):
+    readonly: bool | None = None
+    edits: bool | None = None
+    bash: bool | None = None
+    all: bool | None = None
+
+
+class GitPayload(BaseModel):
+    path: str
+    cmd: str  # status | diff | log | commit | push | pull
+    message: str = ""
+
+
+# ---------- Lifecycle ----------
+
 @app.on_event("startup")
 async def startup():
     projects.scan()
+    sessions.on_approval = handle_approval
+    sessions.on_exit = handle_session_exit
+    chats.on_permission = handle_chat_permission
+    chats.on_turn_done = handle_chat_turn_done
+    telegram.input_handler = handle_telegram_input
+    telegram.permission_handler = handle_telegram_permission
+    telegram.status_provider = build_status_text
+    await telegram.start()
 
-    whisper_model_size = os.getenv("WHISPER_MODEL_SIZE", "small")
-    whisper_model_path = os.getenv("WHISPER_MODEL_PATH", r"D:\whisper-models")
-    asyncio.create_task(load_whisper_background(whisper_model_size, whisper_model_path))
-
-    default_project = projects.choose_default(os.getenv("CODEX_DEFAULT_PROJECT"))
-    if default_project:
-        await codex.start(default_project["path"])
-    else:
-        await codex._broadcast("[JARVIS] Tidak ada project ditemukan. Tambahkan path manual dari HP.\n")
+    if config.WHISPER_ENABLED:
+        asyncio.create_task(load_whisper_background())
 
 
 @app.on_event("shutdown")
 async def shutdown():
-    await codex.stop()
+    await chats.shutdown()
+    await sessions.shutdown()
+    await telegram.stop()
 
 
-async def load_whisper_background(model_size: str, model_path: str):
-    await codex._broadcast(f"[JARVIS] Loading Whisper model '{model_size}' di background...\n")
+async def load_whisper_background():
     try:
-        await asyncio.to_thread(whisper.load, model_size, model_path)
-        await codex._broadcast("[JARVIS] Whisper ready.\n")
+        await asyncio.to_thread(whisper.load, config.WHISPER_MODEL_SIZE, config.WHISPER_MODEL_PATH)
+        print("[JARVIS] Whisper ready.")
     except Exception as exc:
-        print(f"[JARVIS] Whisper load failed: {exc}")
-        await codex._broadcast(f"[JARVIS] Whisper gagal load: {exc}\n")
+        print(f"[JARVIS] Whisper gagal load: {exc}")
 
+
+# ---------- Telegram wiring ----------
+
+async def handle_approval(session: Session, excerpt: str):
+    await telegram.notify_approval(session.id, session.engine, f"{session.project_name} — {session.project_path}", excerpt)
+
+
+async def handle_session_exit(session: Session):
+    await telegram.notify(
+        f"🏁 Sesi {session.engine} di '{session.project_name}' berakhir (exit code {session.exit_code})."
+    )
+
+
+async def handle_telegram_input(session_id: str, data: str, is_named_key: bool) -> bool:
+    session = sessions.get(session_id)
+    if not session:
+        return False
+    if is_named_key:
+        return session.write_key(data)
+    return session.write(data)
+
+
+async def handle_chat_permission(chat: ChatSession, request_event: dict):
+    detail = permission_detail(request_event["tool"], request_event.get("input") or {})
+    await telegram.notify_chat_permission(
+        chat.id, request_event["id"], request_event["tool"], detail,
+        f"{chat.project_name} — {chat.project_path}",
+    )
+
+
+async def handle_chat_turn_done(chat: ChatSession, result_event: dict):
+    if result_event.get("is_error"):
+        await telegram.notify(f"⚠️ Chat Claude di '{chat.project_name}' error ({result_event.get('subtype')}).")
+    elif (result_event.get("duration_ms") or 0) > 45_000:
+        cost = result_event.get("cost_usd")
+        cost_text = f" · ${cost:.2f}" if cost else ""
+        await telegram.notify(f"✅ Task Claude di '{chat.project_name}' selesai{cost_text}.")
+
+
+async def handle_telegram_permission(chat_session_id: str, request_id: str, decision: str) -> bool:
+    chat = chats.get(chat_session_id)
+    if not chat:
+        return False
+    return chat.resolve_permission(request_id, decision)
+
+
+def permission_detail(tool: str, input_data: dict) -> str:
+    if tool == "Bash":
+        return f"$ {input_data.get('command', '')}"
+    if tool in ("Write", "Edit", "MultiEdit", "Read", "NotebookEdit"):
+        detail = input_data.get("file_path", "")
+        if tool == "Edit":
+            detail += f"\n--- lama ---\n{str(input_data.get('old_string', ''))[:200]}"
+            detail += f"\n+++ baru +++\n{str(input_data.get('new_string', ''))[:200]}"
+        elif tool == "Write":
+            detail += f"\n{str(input_data.get('content', ''))[:250]}"
+        return detail
+    pairs = ", ".join(f"{k}={str(v)[:80]}" for k, v in list(input_data.items())[:5])
+    return pairs or tool
+
+
+def build_status_text() -> str:
+    lines = [f"🖥 {config.MACHINE_NAME} — online"]
+    active = sessions.list_info() + chats.list_info()
+    if not active:
+        lines.append("Tidak ada sesi.")
+    for info in active:
+        kind = info.get("engine") or "chat"
+        lines.append(f"• [{info['id']}] {kind} @ {info['project']} — {info['status']}")
+    return "\n".join(lines)
+
+
+# ---------- Frontend (tanpa auth; token dimasukkan user di app) ----------
 
 @app.get("/")
 async def index():
@@ -78,37 +235,59 @@ async def index():
     return FileResponse(FRONTEND_FILE)
 
 
-@app.get("/api/status")
+@app.get("/manifest.json")
+async def manifest():
+    return FileResponse(FRONTEND_FILE.parent / "manifest.json", media_type="application/manifest+json")
+
+
+@app.get("/sw.js")
+async def service_worker():
+    return FileResponse(FRONTEND_FILE.parent / "sw.js", media_type="text/javascript")
+
+
+@app.get("/icon.svg")
+async def icon():
+    return FileResponse(FRONTEND_FILE.parent / "icon.svg", media_type="image/svg+xml")
+
+
+# ---------- API ----------
+
+@api.get("/status")
 async def status():
+    chat_ok, chat_error = sdk_available()
+    engines = engines_available()
+    engines["chat"] = {"available": chat_ok and engines.get("claude", {}).get("available", False)}
+    if not engines["chat"]["available"]:
+        engines["chat"]["error"] = chat_error or engines.get("claude", {}).get("error")
     return {
         "backend": "online",
+        "machine": config.MACHINE_NAME,
+        "platform": "windows" if config.IS_WINDOWS else "linux",
+        "engines": engines,
+        "chats": chats.list_info(),
         "whisper": {
+            "enabled": config.WHISPER_ENABLED,
             "loaded": whisper.is_loaded,
             "loading": whisper.is_loading,
             "model_size": whisper.model_size,
             "error": whisper.last_error,
         },
-        "codex": {
-            "running": codex.is_running,
-            "busy": codex.is_busy,
-            "project": codex.current_project,
-            "error": codex.last_error,
-        },
+        "sessions": sessions.list_info(),
         "active_project": projects.active_project,
     }
 
 
-@app.get("/api/projects")
+@api.get("/projects")
 async def list_projects():
     return {"projects": projects.projects, "active_project": projects.active_project}
 
 
-@app.post("/api/projects/refresh")
+@api.post("/projects/refresh")
 async def refresh_projects():
     return {"projects": projects.scan(), "active_project": projects.active_project}
 
 
-@app.post("/api/projects/custom")
+@api.post("/projects/custom")
 async def add_custom_project(payload: PathPayload):
     project = projects.add_custom(payload.path)
     if not project:
@@ -116,7 +295,7 @@ async def add_custom_project(payload: PathPayload):
     return {"project": project, "projects": projects.projects}
 
 
-@app.post("/api/projects/command")
+@api.post("/projects/command")
 async def run_project_command(payload: TextPayload):
     try:
         project = projects.run_command(payload.text)
@@ -125,25 +304,189 @@ async def run_project_command(payload: TextPayload):
     return {"project": project, "projects": projects.projects}
 
 
-@app.post("/api/switch-project")
-async def switch_project(payload: PathPayload):
+@api.get("/sessions")
+async def list_sessions():
+    return {"sessions": sessions.list_info()}
+
+
+@api.post("/sessions")
+async def create_session(payload: CreateSessionPayload):
     project = projects.set_active(payload.path)
     if not project:
         raise HTTPException(status_code=404, detail="Project tidak ditemukan")
 
-    await codex.switch_project(project["path"])
-    return {"ok": True, "active_project": project}
+    try:
+        session = await sessions.create(payload.engine, project["path"], payload.cols, payload.rows)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Gagal start sesi: {exc}") from exc
+
+    return {"session": session.info()}
 
 
-@app.post("/api/send")
-async def send_to_codex(payload: TextPayload):
-    sent = await codex.send_input(payload.text)
-    if not sent:
-        raise HTTPException(status_code=409, detail="Codex belum running atau teks kosong")
+@api.post("/sessions/{session_id}/input")
+async def session_input(session_id: str, payload: InputPayload):
+    session = sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Sesi tidak ditemukan")
+    data = payload.text + ("\r" if payload.enter else "")
+    if not data:
+        raise HTTPException(status_code=400, detail="Input kosong")
+    if not session.write(data):
+        raise HTTPException(status_code=409, detail="Sesi sudah tidak berjalan")
     return {"ok": True}
 
 
-@app.post("/api/transcribe")
+@api.post("/sessions/{session_id}/key")
+async def session_key(session_id: str, payload: KeyPayload):
+    session = sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Sesi tidak ditemukan")
+    if not session.write_key(payload.key):
+        raise HTTPException(status_code=409, detail="Key tidak dikenal atau sesi sudah berhenti")
+    return {"ok": True}
+
+
+@api.post("/sessions/{session_id}/resize")
+async def session_resize(session_id: str, payload: ResizePayload):
+    session = sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Sesi tidak ditemukan")
+    session.resize(payload.cols, payload.rows)
+    return {"ok": True}
+
+
+@api.delete("/sessions/{session_id}")
+async def delete_session(session_id: str):
+    session = sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Sesi tidak ditemukan")
+    await session.kill()
+    sessions.remove(session_id)
+    return {"ok": True}
+
+
+# ---------- Chat (Claude Agent SDK) ----------
+
+@api.get("/chat")
+async def list_chats():
+    active = chats.list_info()
+    active_ids = {c["id"] for c in active}
+    recent = [r for r in db.recent_chat_sessions(20) if r["id"] not in active_ids]
+    return {"active": active, "recent": recent}
+
+
+@api.post("/chat")
+async def create_chat(payload: CreateChatPayload):
+    try:
+        if payload.resume_id:
+            chat = await chats.resume(payload.resume_id)
+        else:
+            project = projects.set_active(payload.path)
+            if not project:
+                raise HTTPException(status_code=404, detail="Project tidak ditemukan")
+            chat = await chats.create(project["path"])
+    except HTTPException:
+        raise
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Gagal start chat: {exc}") from exc
+    return {"chat": chat.info()}
+
+
+@api.post("/chat/{chat_id}/prompt")
+async def chat_prompt(chat_id: str, payload: TextPayload):
+    chat = chats.get(chat_id)
+    if not chat:
+        raise HTTPException(status_code=404, detail="Sesi chat tidak ditemukan")
+    sent = await chat.send_prompt(payload.text)
+    if not sent:
+        raise HTTPException(status_code=409, detail="Chat sedang memproses atau teks kosong")
+    return {"ok": True}
+
+
+@api.post("/chat/{chat_id}/permission")
+async def chat_permission(chat_id: str, payload: PermissionPayload):
+    chat = chats.get(chat_id)
+    if not chat:
+        raise HTTPException(status_code=404, detail="Sesi chat tidak ditemukan")
+    if not chat.resolve_permission(payload.request_id, payload.decision, payload.message):
+        raise HTTPException(status_code=409, detail="Permission request sudah tidak aktif")
+    return {"ok": True}
+
+
+@api.post("/chat/{chat_id}/interrupt")
+async def chat_interrupt(chat_id: str):
+    chat = chats.get(chat_id)
+    if not chat:
+        raise HTTPException(status_code=404, detail="Sesi chat tidak ditemukan")
+    await chat.interrupt()
+    return {"ok": True}
+
+
+@api.post("/chat/{chat_id}/auto-allow")
+async def chat_auto_allow(chat_id: str, payload: AutoAllowPayload):
+    chat = chats.get(chat_id)
+    if not chat:
+        raise HTTPException(status_code=404, detail="Sesi chat tidak ditemukan")
+    chat.set_auto_allow(payload.model_dump(exclude_none=True))
+    return {"ok": True, "auto_allow": chat.auto_allow}
+
+
+@api.delete("/chat/{chat_id}")
+async def close_chat(chat_id: str, delete_history: bool = False):
+    closed = await chats.close(chat_id, delete_history=delete_history)
+    if not closed:
+        raise HTTPException(status_code=404, detail="Sesi chat tidak ditemukan")
+    return {"ok": True}
+
+
+# ---------- Git ----------
+
+GIT_COMMANDS = {
+    "status": ["git", "status", "--short", "--branch"],
+    "diff": ["git", "diff", "HEAD"],
+    "log": ["git", "log", "--oneline", "-15"],
+    "push": ["git", "push"],
+    "pull": ["git", "pull"],
+}
+
+
+@api.post("/git")
+async def git_command(payload: GitPayload):
+    if not Path(payload.path).is_dir():
+        raise HTTPException(status_code=400, detail="Path tidak valid")
+
+    if payload.cmd == "commit":
+        if not payload.message.strip():
+            raise HTTPException(status_code=400, detail="Pesan commit wajib diisi")
+        add_out = await run_git(payload.path, ["git", "add", "-A"])
+        commit_out = await run_git(payload.path, ["git", "commit", "-m", payload.message.strip()])
+        return {"output": (add_out + "\n" + commit_out).strip()}
+
+    command = GIT_COMMANDS.get(payload.cmd)
+    if not command:
+        raise HTTPException(status_code=400, detail=f"Perintah git tidak didukung: {payload.cmd}")
+    output = await run_git(payload.path, command)
+    return {"output": output.strip() or "(tidak ada output)"}
+
+
+async def run_git(cwd: str, command: list[str]) -> str:
+    process = await asyncio.create_subprocess_exec(
+        *command,
+        cwd=cwd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+    )
+    stdout, _ = await asyncio.wait_for(process.communicate(), timeout=60)
+    return stdout.decode("utf-8", errors="replace")[:100_000]
+
+
+@api.post("/transcribe")
 async def transcribe_audio(file: UploadFile = File(...)):
     ensure_whisper_ready()
     audio_path = await save_upload(file)
@@ -153,47 +496,104 @@ async def transcribe_audio(file: UploadFile = File(...)):
         if Path(audio_path).exists():
             Path(audio_path).unlink()
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-
     return {"text": text}
 
 
-@app.post("/api/transcribe-and-send")
-async def transcribe_and_send(file: UploadFile = File(...)):
-    ensure_whisper_ready()
-    audio_path = await save_upload(file)
-    try:
-        text = await asyncio.to_thread(whisper.transcribe, audio_path)
-    except Exception as exc:
-        if Path(audio_path).exists():
-            Path(audio_path).unlink()
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-
-    sent = await codex.send_input(text)
-    return {"text": text, "sent": sent}
+app.include_router(api)
 
 
-@app.post("/api/restart-codex")
-async def restart_codex():
-    await codex.restart()
-    return {"ok": True}
+# ---------- WebSocket per sesi ----------
 
+@app.websocket("/ws/session/{session_id}")
+async def websocket_session(
+    websocket: WebSocket,
+    session_id: str,
+    token: str = Query(""),
+    since: int = Query(0),
+):
+    if not ws_token_valid(token):
+        await websocket.close(code=4401)
+        return
 
-@app.websocket("/ws/output")
-async def websocket_output(websocket: WebSocket):
+    session = sessions.get(session_id)
+    if not session:
+        await websocket.close(code=4404)
+        return
+
     await websocket.accept()
 
-    async def send(text: str):
-        await websocket.send_text(text)
+    backlog = session.output_since(since)
+    await websocket.send_json({"t": "o", "d": backlog, "s": session.seq})
+    if session.status == "exited":
+        await websocket.send_json({"t": "exit", "code": session.exit_code})
 
-    codex.add_output_callback(send)
-    await send("[JARVIS] Connected to Jarvis output stream.\n")
+    async def forward(frame: dict):
+        await websocket.send_json(frame)
 
+    session.subscribe(forward)
     try:
         while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        codex.remove_output_callback(send)
+            message = await websocket.receive_json()
+            kind = message.get("t")
+            if kind == "i":
+                session.write(str(message.get("d", "")))
+            elif kind == "key":
+                session.write_key(str(message.get("k", "")))
+            elif kind == "resize":
+                session.resize(int(message.get("cols", 80)), int(message.get("rows", 24)))
+    except (WebSocketDisconnect, Exception):
+        pass
+    finally:
+        session.unsubscribe(forward)
 
+
+@app.websocket("/ws/chat/{chat_id}")
+async def websocket_chat(
+    websocket: WebSocket,
+    chat_id: str,
+    token: str = Query(""),
+    since: int = Query(0),
+):
+    if not ws_token_valid(token):
+        await websocket.close(code=4401)
+        return
+
+    chat = chats.get(chat_id)
+    if not chat:
+        await websocket.close(code=4404)
+        return
+
+    await websocket.accept()
+
+    await websocket.send_json({"t": "hello", "info": chat.info()})
+    for event in chat.events_since(since):
+        await websocket.send_json(event)
+
+    async def forward(event: dict):
+        await websocket.send_json(event)
+
+    chat.subscribe(forward)
+    try:
+        while True:
+            message = await websocket.receive_json()
+            kind = message.get("t")
+            if kind == "prompt":
+                await chat.send_prompt(str(message.get("text", "")))
+            elif kind == "permission":
+                chat.resolve_permission(
+                    str(message.get("id", "")),
+                    str(message.get("decision", "")),
+                    str(message.get("message", "")),
+                )
+            elif kind == "interrupt":
+                await chat.interrupt()
+    except (WebSocketDisconnect, Exception):
+        pass
+    finally:
+        chat.unsubscribe(forward)
+
+
+# ---------- Helpers ----------
 
 async def save_upload(file: UploadFile) -> str:
     suffix = Path(file.filename or "audio.webm").suffix or ".webm"
@@ -208,8 +608,10 @@ async def save_upload(file: UploadFile) -> str:
 
 
 def ensure_whisper_ready():
+    if not config.WHISPER_ENABLED:
+        raise HTTPException(status_code=503, detail="Whisper dinonaktifkan di mesin ini (WHISPER_ENABLED=false).")
     if whisper.is_loaded:
         return
     if whisper.is_loading:
-        raise HTTPException(status_code=503, detail="Whisper masih loading/download model. Coba lagi setelah status ready.")
+        raise HTTPException(status_code=503, detail="Whisper masih loading model. Coba lagi sebentar.")
     raise HTTPException(status_code=503, detail=whisper.last_error or "Whisper belum siap.")

@@ -2,9 +2,15 @@
 <html lang="id">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Jarvis Remote Codex</title>
-  <script src="https://cdn.jsdelivr.net/npm/ansi_up@5/ansi_up.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#12171d">
+  <title>Jarvis Remote</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon.svg">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
   <style>
     :root {
       color-scheme: dark;
@@ -32,771 +38,1241 @@
       font-family: Inter, Segoe UI, system-ui, -apple-system, sans-serif;
     }
 
-    button, input, textarea { font: inherit; }
+    button, input, textarea, select { font: inherit; }
 
     button {
       display: inline-grid;
-      min-width: 42px;
-      min-height: 42px;
+      min-width: 40px;
+      min-height: 40px;
       place-items: center;
       border: 1px solid var(--line);
       border-radius: 10px;
       background: var(--panel-2);
       color: var(--text);
       cursor: pointer;
+      padding: 0 10px;
     }
 
-    button:disabled { cursor: not-allowed; opacity: .55; }
-    button:hover { border-color: #425263; }
+    button:disabled { cursor: not-allowed; opacity: .5; }
+    button:active { border-color: #425263; }
 
-    input, textarea {
+    input, textarea, select {
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 10px;
       outline: none;
       background: #0b0f13;
       color: var(--text);
-      padding: 11px 12px;
+      padding: 10px 12px;
     }
 
     input:focus, textarea:focus { border-color: var(--blue); }
 
-    .icon {
-      width: 20px;
-      height: 20px;
-      fill: none;
-      stroke: currentColor;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-width: 2;
-    }
-
     .app {
       height: 100dvh;
       display: grid;
-      grid-template-rows: 54px minmax(0, 1fr) auto;
+      grid-template-rows: 52px minmax(0, 1fr) auto auto auto;
       background: var(--terminal);
     }
 
+    /* ---- Topbar ---- */
     .topbar {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      padding: 7px 10px;
+      gap: 8px;
+      padding: 7px 8px;
       border-bottom: 1px solid var(--line);
       background: var(--panel);
     }
 
-    .top-left, .top-right, .status-dots, .composer-actions, .drawer-actions {
+    .machine-btn {
       display: flex;
       align-items: center;
-      gap: 8px;
-    }
-
-    .brand { font-size: 16px; letter-spacing: .12em; }
-
-    .icon-button {
-      min-width: 38px;
-      min-height: 38px;
-      padding: 0;
-      background: transparent;
-    }
-
-    .status-button {
-      display: flex;
-      min-width: auto;
-      min-height: 38px;
       gap: 7px;
-      padding: 0 10px;
+      min-height: 38px;
+      max-width: 34vw;
+      overflow: hidden;
+      white-space: nowrap;
       background: transparent;
     }
 
-    .dot {
-      width: 9px;
-      height: 9px;
-      display: block;
-      border-radius: 50%;
-      background: var(--danger);
-      box-shadow: 0 0 0 2px rgba(255, 98, 92, .12);
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--danger); flex: 0 0 auto; }
+    .dot.on { background: var(--accent); }
+
+    #sessionSelect {
+      flex: 1;
+      min-width: 0;
+      min-height: 38px;
+      padding: 0 8px;
+      background: var(--panel-2);
+      border-radius: 10px;
     }
 
-    .dot.ok {
-      background: var(--accent);
-      box-shadow: 0 0 0 2px rgba(53, 201, 120, .12);
+    .icon-btn { min-width: 38px; min-height: 38px; padding: 0; background: transparent; font-size: 17px; }
+    .icon-btn.danger { color: var(--danger); }
+
+    /* ---- Terminal ---- */
+    #termwrap { position: relative; min-height: 0; padding: 4px 0 0 6px; }
+    #terminal { width: 100%; height: 100%; }
+    .xterm .xterm-viewport { background: var(--terminal) !important; }
+
+    #emptyState {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      color: var(--muted);
+      padding: 20px;
+      font-size: 14px;
+      line-height: 1.7;
+      background: var(--terminal);
+      z-index: 5;
     }
 
-    .dot.warn {
-      background: var(--warn);
-      box-shadow: 0 0 0 2px rgba(244, 185, 66, .12);
-    }
-
-    .terminal {
+    /* ---- Chat ---- */
+    #chatwrap {
+      height: 100%;
       min-height: 0;
       overflow-y: auto;
-      padding: 14px clamp(10px, 3vw, 32px) 22px;
-      scroll-behavior: smooth;
-    }
-
-    .messages {
-      width: min(100%, 1180px);
-      min-height: 100%;
-      display: flex;
+      padding: 12px 10px 8px;
+      display: none;
       flex-direction: column;
-      gap: 12px;
-      margin: 0 auto;
+      gap: 8px;
+      background: var(--bg);
+      -webkit-overflow-scrolling: touch;
     }
 
-    .empty {
-      margin: auto;
-      color: var(--muted);
-      font-size: 13px;
-      text-align: center;
+    .msg { max-width: 92%; border-radius: 12px; padding: 9px 12px; font-size: 14px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+    .msg.user { align-self: flex-end; background: #143a26; border: 1px solid #1e5c3a; }
+    .msg.ai { align-self: flex-start; background: var(--panel-2); border: 1px solid var(--line); }
+    .msg.ai pre, .card pre {
+      background: #0b0f13;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px;
+      overflow-x: auto;
+      font-size: 12px;
+      margin: 6px 0;
     }
+    .msg.ai code { background: #0b0f13; border-radius: 4px; padding: 1px 5px; font-size: 12.5px; }
 
-    .message {
-      max-width: min(92%, 980px);
+    .card {
+      align-self: stretch;
       border: 1px solid var(--line);
       border-radius: 12px;
-      padding: 10px 12px;
-      word-break: break-word;
+      background: var(--panel);
+      padding: 9px 11px;
+      font-size: 13px;
     }
+    .card .head { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+    .card .head b { color: var(--text); }
+    .card .sub { color: var(--muted); font-family: Menlo, Consolas, monospace; font-size: 12px; margin-top: 3px; overflow-wrap: anywhere; }
+    .card details { margin-top: 6px; }
+    .card summary { color: var(--blue); font-size: 12px; cursor: pointer; }
 
-    .message.output {
-      align-self: flex-start;
-      border-color: transparent;
-      background: transparent;
-      color: #dbe5ee;
-      padding-left: 0;
-    }
+    .card.permission { border-color: var(--warn); background: #1d1809; }
+    .card.permission .actions { display: flex; gap: 8px; margin-top: 10px; }
+    .card.permission .actions button { flex: 1; min-height: 40px; font-size: 13px; }
+    .btn-allow { background: #123c22 !important; border-color: var(--accent) !important; color: var(--accent) !important; }
+    .btn-deny { background: #3c1512 !important; border-color: var(--danger) !important; color: var(--danger) !important; }
+    .badge { display: inline-block; border-radius: 6px; padding: 2px 8px; font-size: 11.5px; border: 1px solid var(--line); color: var(--muted); }
+    .badge.ok { color: var(--accent); border-color: var(--accent); }
+    .badge.no { color: var(--danger); border-color: var(--danger); }
 
-    .message.user {
-      align-self: flex-end;
-      border-color: #285c91;
-      background: #12385f;
-      color: #f3f8fd;
-    }
+    .diff { font-family: Menlo, Consolas, monospace; font-size: 12px; border-radius: 8px; overflow: hidden; margin-top: 6px; }
+    .diff .old { background: #3a1512; color: #ffb3ad; padding: 6px 8px; white-space: pre-wrap; word-break: break-all; border-bottom: 1px solid var(--line); }
+    .diff .new { background: #0f2f1c; color: #a9edc4; padding: 6px 8px; white-space: pre-wrap; word-break: break-all; }
 
-    .output pre {
-      margin: 0;
-      white-space: pre-wrap;
-      word-break: break-word;
-      font: 13px/1.5 Consolas, "Cascadia Mono", monospace;
-    }
+    .divider { align-self: center; color: var(--muted); font-size: 12px; padding: 3px 0; }
+    .divider.err { color: var(--danger); }
 
-    .composer-wrap {
+    .thinking { align-self: stretch; color: var(--muted); font-size: 12px; }
+    .thinking summary { cursor: pointer; }
+    .thinking .body { white-space: pre-wrap; font-style: italic; padding: 6px 2px; }
+
+    /* ---- Chat bar (auto-allow & status) ---- */
+    #chatbar {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      overflow-x: auto;
+      padding: 6px 8px;
       border-top: 1px solid var(--line);
-      background: rgba(18, 23, 29, .98);
-      padding: 9px max(9px, env(safe-area-inset-right)) max(9px, env(safe-area-inset-bottom));
+      background: var(--panel);
+      scrollbar-width: none;
+    }
+    #chatbar::-webkit-scrollbar { display: none; }
+    #chatbar .pill {
+      flex: 0 0 auto;
+      min-height: 32px;
+      min-width: auto;
+      padding: 0 10px;
+      font-size: 12px;
+      border-radius: 999px;
+      color: var(--muted);
+    }
+    #chatbar .pill.on { color: var(--accent); border-color: var(--accent); }
+    #chatStatus { flex: 0 0 auto; font-size: 12px; color: var(--muted); padding: 0 4px; }
+    #chatStatus.running { color: var(--warn); }
+    #chatStatus.waiting { color: var(--danger); }
+
+    /* ---- Quick keys ---- */
+    .quickkeys {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding: 6px 8px;
+      border-top: 1px solid var(--line);
+      background: var(--panel);
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .quickkeys::-webkit-scrollbar { display: none; }
+    .quickkeys button { flex: 0 0 auto; min-height: 36px; min-width: 44px; font-size: 13px; }
+
+    /* ---- Templates ---- */
+    #templates {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding: 6px 8px 0;
+      background: var(--panel);
+      scrollbar-width: none;
+    }
+    #templates::-webkit-scrollbar { display: none; }
+    #templates button {
+      flex: 0 0 auto;
+      min-height: 30px;
+      min-width: auto;
+      font-size: 12px;
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 0 12px;
+      max-width: 60vw;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      display: block;
+      line-height: 30px;
     }
 
+    /* ---- Composer ---- */
     .composer {
-      width: min(100%, 1180px);
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto;
-      align-items: end;
+      display: flex;
+      align-items: flex-end;
       gap: 8px;
-      margin: 0 auto;
+      padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+      background: var(--panel);
     }
 
     .composer textarea {
-      min-height: 44px;
-      max-height: 132px;
+      flex: 1;
       resize: none;
-      line-height: 20px;
+      max-height: 110px;
+      min-height: 42px;
+      line-height: 1.45;
     }
 
-    .mic.recording {
-      border-color: var(--danger);
-      background: #6e2424;
-      color: #fff;
-    }
+    .composer .send { background: var(--accent); border-color: var(--accent); color: #06280f; font-weight: 600; }
+    .composer .mic.recording { background: var(--danger); border-color: var(--danger); animation: pulse 1.2s infinite; }
+    @keyframes pulse { 50% { opacity: .6; } }
 
-    .send {
-      border-color: #2e6ea9;
-      background: #185188;
-      color: #fff;
-    }
-
-    .composer-meta {
-      width: min(100%, 1180px);
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      margin: 6px auto 0;
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    .toggle {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      user-select: none;
-    }
-
-    .toggle input { width: 15px; height: 15px; }
-
-    .backdrop {
+    /* ---- Overlay / sheet ---- */
+    .overlay {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, .56);
-      z-index: 20;
-      opacity: 0;
-      pointer-events: none;
-      visibility: hidden;
-      transition: opacity .22s ease, visibility 0s linear .22s;
+      display: none;
+      background: rgba(0,0,0,.55);
+      z-index: 40;
     }
+    .overlay.open { display: block; }
 
-    .backdrop.open {
-      opacity: 1;
-      pointer-events: auto;
-      visibility: visible;
-      transition-delay: 0s;
-    }
-
-    .drawer {
-      width: min(92vw, 440px);
-      height: 100%;
-      display: grid;
-      grid-template-rows: auto auto auto minmax(0, 1fr) auto;
-      border-right: 1px solid var(--line);
+    .sheet {
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: min(92vw, 400px);
+      display: flex;
+      flex-direction: column;
       background: var(--panel);
-      box-shadow: 12px 0 32px rgba(0, 0, 0, .28);
-      transform: translateX(-100%);
-      transition: transform .28s cubic-bezier(.22, 1, .36, 1);
-    }
-
-    .backdrop.open .drawer { transform: translateX(0); }
-
-    .drawer-head, .drawer-active, .drawer-search, .drawer-tools {
+      border-left: 1px solid var(--line);
       padding: 12px;
-      border-bottom: 1px solid var(--line);
+      overflow-y: auto;
+      gap: 10px;
     }
 
-    .drawer-head {
+    .sheet h3 { margin: 2px 0 4px; font-size: 15px; letter-spacing: .06em; }
+    .sheet h4 { margin: 8px 0 2px; font-size: 12.5px; letter-spacing: .08em; color: var(--muted); }
+    .sheet .muted { color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+
+    .row { display: flex; gap: 8px; align-items: center; }
+    .row > * { min-width: 0; }
+    .grow { flex: 1; }
+
+    .seg { display: flex; gap: 6px; flex-wrap: wrap; }
+    .seg button { flex: 1; min-height: 40px; min-width: 70px; }
+    .seg button.active { border-color: var(--accent); color: var(--accent); }
+    .seg button.unavailable { opacity: .4; }
+
+    .list { display: flex; flex-direction: column; gap: 6px; }
+
+    .item {
       display: flex;
       align-items: center;
-      justify-content: space-between;
       gap: 8px;
-    }
-
-    .drawer-active { background: #101820; }
-
-    .label, .small {
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    .active-name {
-      margin-top: 4px;
-      overflow: hidden;
-      color: var(--text);
-      font-weight: 700;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .active-path {
-      margin-top: 3px;
-      overflow-wrap: anywhere;
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    .project-list { overflow-y: auto; padding: 9px 12px; }
-    .group { margin-bottom: 15px; }
-
-    .group-title {
-      margin: 5px 0 7px;
-      overflow-wrap: anywhere;
-      color: var(--blue);
-      font-size: 12px;
-    }
-
-    .project-item {
-      width: 100%;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 8px;
-      margin-bottom: 6px;
-      padding: 9px 10px;
-      text-align: left;
-    }
-
-    .project-item strong, .project-item .small {
-      display: block;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .badge {
-      align-self: center;
       border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 3px 7px;
-      color: var(--muted);
-      font-size: 11px;
-      white-space: nowrap;
-    }
-
-    .drawer-tools {
-      display: grid;
-      gap: 8px;
-      border-top: 1px solid var(--line);
-      border-bottom: 0;
-    }
-
-    .input-action {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 7px;
-    }
-
-    .status-popup {
-      position: fixed;
-      top: 60px;
-      right: 10px;
-      z-index: 30;
-      display: none;
-      width: min(310px, calc(100vw - 20px));
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: var(--panel);
-      box-shadow: 0 16px 34px rgba(0, 0, 0, .36);
+      border-radius: 10px;
+      background: var(--panel-2);
       padding: 10px;
+      cursor: pointer;
     }
+    .item.active { border-color: var(--accent); }
+    .item .name { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .item .sub { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .item .tag { margin-left: auto; flex: 0 0 auto; color: var(--muted); font-size: 11px; border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; }
 
-    .status-popup.open { display: grid; gap: 3px; }
+    .hr { border-top: 1px solid var(--line); margin: 4px 0; }
 
-    .status-row {
-      display: grid;
-      grid-template-columns: auto 1fr;
-      align-items: center;
-      gap: 8px;
+    #gitOutput {
+      background: #0b0f13;
+      border: 1px solid var(--line);
       border-radius: 8px;
       padding: 8px;
-      font-size: 13px;
-    }
-
-    .toast {
-      position: fixed;
-      right: 12px;
-      bottom: 86px;
-      z-index: 40;
+      font-family: Menlo, Consolas, monospace;
+      font-size: 11.5px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 40vh;
+      overflow-y: auto;
       display: none;
-      max-width: min(420px, calc(100vw - 24px));
-      border: 1px solid #7d3e3b;
+    }
+
+    #toast {
+      position: fixed;
+      left: 50%;
+      bottom: 90px;
+      transform: translateX(-50%);
+      max-width: 88vw;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
       border-radius: 10px;
-      background: #402220;
-      color: #ffe7e5;
-      padding: 10px 12px;
+      padding: 10px 14px;
       font-size: 13px;
-    }
-
-    .toast.open { display: block; }
-
-    @media (max-width: 540px) {
-      .topbar { padding-inline: 8px; }
-      .terminal { padding: 11px 9px 17px; }
-      .message { max-width: 95%; }
-      .output pre { font-size: 12px; }
-      .composer-wrap { padding-inline: 7px; }
-      .composer { gap: 6px; }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .backdrop, .drawer { transition: none; }
+      display: none;
+      z-index: 60;
+      white-space: pre-wrap;
     }
   </style>
 </head>
 <body>
-  <main class="app">
-    <header class="topbar">
-      <div class="top-left">
-        <button id="openProjects" class="icon-button" title="Buka project drawer" aria-label="Buka project drawer">
-          <svg class="icon" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-        </button>
-        <strong class="brand">JARVIS</strong>
-      </div>
-      <div class="top-right">
-        <button id="statusButton" class="status-button" title="Lihat status" aria-label="Lihat status">
-          <span id="backendDot" class="dot"></span>
-          <span id="codexDot" class="dot"></span>
-          <span id="whisperDot" class="dot warn"></span>
-        </button>
-      </div>
-    </header>
+  <div class="app">
+    <div class="topbar">
+      <button class="machine-btn" id="machineBtn">
+        <span class="dot" id="machineDot"></span>
+        <span id="machineName">+ Mesin</span>
+      </button>
+      <select id="sessionSelect"></select>
+      <button class="icon-btn danger" id="stopBtn" title="Stop sesi">⏻</button>
+      <button class="icon-btn" id="projectsBtn" title="Projects">☰</button>
+    </div>
 
-    <section id="terminal" class="terminal" aria-label="Output Codex">
-      <div id="messages" class="messages">
-        <div id="emptyState" class="empty">Output Codex akan tampil di sini.</div>
+    <div id="mainArea" style="display:contents">
+      <div id="termwrap">
+        <div id="terminal"></div>
+        <div id="emptyState">
+          <div>
+            <b>JARVIS</b><br>
+            Pilih mesin (kiri atas), lalu buka ☰ untuk<br>memilih project &amp; mulai sesi Chat / Terminal.
+          </div>
+        </div>
+        <div id="chatwrap"></div>
       </div>
-    </section>
+    </div>
 
-    <section class="composer-wrap">
+    <div id="chatbar">
+      <span id="chatStatus">—</span>
+      <button class="pill" id="interruptBtn">■ Stop task</button>
+      <span style="color:var(--muted);font-size:11px;flex:0 0 auto">Auto-izin:</span>
+      <button class="pill" data-flag="readonly">baca</button>
+      <button class="pill" data-flag="edits">edit file</button>
+      <button class="pill" data-flag="bash">bash</button>
+      <button class="pill" data-flag="all">semua</button>
+    </div>
+
+    <div class="quickkeys" id="quickkeys">
+      <button data-key="esc">Esc</button>
+      <button data-key="tab">Tab</button>
+      <button data-key="shift_tab">⇤Tab</button>
+      <button data-key="up">↑</button>
+      <button data-key="down">↓</button>
+      <button data-key="left">←</button>
+      <button data-key="right">→</button>
+      <button data-key="enter">⏎</button>
+      <button data-key="ctrl_c">^C</button>
+      <button data-lit="y">y</button>
+      <button data-lit="n">n</button>
+      <button data-lit="1">1</button>
+      <button data-lit="2">2</button>
+      <button data-lit="3">3</button>
+      <button data-key="backspace">⌫</button>
+    </div>
+
+    <div>
+      <div id="templates"></div>
       <div class="composer">
-        <button id="micButton" class="icon-button mic" title="Rekam suara" aria-label="Rekam suara">
-          <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4M9 21h6"/></svg>
-        </button>
-        <textarea id="promptInput" rows="1" placeholder="Ketik perintah atau rekam suara..."></textarea>
-        <button id="sendButton" class="icon-button send" title="Kirim ke Codex" aria-label="Kirim ke Codex">
-          <svg class="icon" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
-        </button>
+        <textarea id="promptInput" rows="1" placeholder="Ketik prompt…"></textarea>
+        <button class="mic icon-btn" id="micBtn" title="Rekam suara">🎙</button>
+        <button class="send" id="sendBtn">Kirim</button>
       </div>
-      <div class="composer-meta">
-        <label class="toggle"><input id="autoSend" type="checkbox"> Auto-send suara</label>
-        <span id="busyText">idle</span>
-      </div>
-    </section>
-  </main>
-
-  <div id="projectBackdrop" class="backdrop" aria-hidden="true">
-    <aside class="drawer" aria-label="Project manager">
-      <div class="drawer-head">
-        <strong>Project</strong>
-        <div class="drawer-actions">
-          <button id="refreshProjects" class="icon-button" title="Refresh daftar project" aria-label="Refresh daftar project">
-            <svg class="icon" viewBox="0 0 24 24"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5M4 13a8.1 8.1 0 0 0 15.5 2m.5 5v-5h-5"/></svg>
-          </button>
-          <button id="closeProjects" class="icon-button" title="Tutup drawer" aria-label="Tutup drawer">
-            <svg class="icon" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
-          </button>
-        </div>
-      </div>
-      <div class="drawer-active">
-        <div class="label">Project aktif</div>
-        <div id="activeProject" class="active-name">Belum ada project</div>
-        <div id="activeProjectMeta" class="active-path">-</div>
-        <button id="restartCodex" style="width:100%;margin-top:10px">Restart Codex</button>
-      </div>
-      <div class="drawer-search">
-        <input id="projectSearch" placeholder="Cari nama atau path project...">
-      </div>
-      <div id="projectList" class="project-list"></div>
-      <div class="drawer-tools">
-        <div class="label">Buka path manual</div>
-        <div class="input-action">
-          <input id="manualPath" placeholder="D:\project-lain">
-          <button id="addManual" title="Tambah dan buka">Buka</button>
-        </div>
-        <div class="label">Buat folder dengan command terbatas</div>
-        <div class="input-action">
-          <input id="projectCommand" placeholder='mkdir "D:\_2026\project-baru"'>
-          <button id="runCommand" title="Jalankan mkdir">Run</button>
-        </div>
-      </div>
-    </aside>
+    </div>
   </div>
 
-  <div id="statusPopup" class="status-popup">
-    <div class="status-row"><span id="backendPopupDot" class="dot"></span><span id="backendText">Backend offline</span></div>
-    <div class="status-row"><span id="codexPopupDot" class="dot"></span><span id="codexText">Codex mati</span></div>
-    <div class="status-row"><span id="whisperPopupDot" class="dot warn"></span><span id="whisperText">Whisper loading</span></div>
+  <!-- Drawer: projects, riwayat, git -->
+  <div class="overlay" id="projectOverlay">
+    <div class="sheet">
+      <h3>PROJECT — <span id="drawerMachine"></span></h3>
+      <div class="seg" id="engineSeg">
+        <button data-engine="chat" class="active">💬 Chat</button>
+        <button data-engine="claude">Claude CLI</button>
+        <button data-engine="codex">Codex</button>
+        <button data-engine="shell">Shell</button>
+      </div>
+      <div class="muted">Tap project untuk mulai sesi dengan mode di atas. <b>Chat</b> = Claude Code dengan kartu izin & riwayat (direkomendasikan).</div>
+      <div class="row">
+        <input id="customPath" placeholder="Path custom, mis. /home/user/proyek">
+        <button id="addPathBtn">＋</button>
+      </div>
+      <div class="row">
+        <input id="mkdirPath" placeholder='mkdir "/path/folder-baru"'>
+        <button id="mkdirBtn">Run</button>
+      </div>
+      <div class="row">
+        <button id="refreshProjects" class="grow">↻ Refresh daftar</button>
+      </div>
+      <div class="list" id="projectList"></div>
+
+      <div class="hr"></div>
+      <h4>RIWAYAT CHAT (tap untuk lanjutkan)</h4>
+      <div class="list" id="chatHistory"></div>
+
+      <div class="hr"></div>
+      <h4>GIT — <span id="gitPath" class="muted">sesi aktif</span></h4>
+      <div class="seg">
+        <button data-git="status">Status</button>
+        <button data-git="diff">Diff</button>
+        <button data-git="log">Log</button>
+        <button data-git="pull">Pull</button>
+        <button data-git="push">Push</button>
+      </div>
+      <div class="row">
+        <input id="commitMsg" placeholder="Pesan commit…">
+        <button id="commitBtn">Commit</button>
+      </div>
+      <div id="gitOutput"></div>
+    </div>
   </div>
-  <div id="toast" class="toast"></div>
+
+  <!-- Sheet: machines -->
+  <div class="overlay" id="machineOverlay">
+    <div class="sheet">
+      <h3>MESIN</h3>
+      <div class="muted">Tambahkan agent Jarvis di tiap mesin. URL = alamat Tailscale, mis. <i>http://100.x.y.z:8300</i>. Token = JARVIS_AUTH_TOKEN di backend/.env mesin itu.</div>
+      <div class="list" id="machineList"></div>
+      <div class="hr"></div>
+      <input id="mName" placeholder="Nama (mis. PC-Ubuntu)">
+      <input id="mUrl" placeholder="http://100.x.y.z:8300">
+      <input id="mToken" placeholder="Token" autocomplete="off">
+      <div class="row">
+        <button id="saveMachine" class="grow">Simpan</button>
+        <button id="cancelEdit">Batal</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
 
   <script>
-    const ansi = new AnsiUp();
-    const state = {
-      projects: [],
-      entries: [],
-      status: null,
-      ws: null,
-      mediaRecorder: null,
-      chunks: []
+    // ================= Store =================
+    const store = {
+      get machines() { return JSON.parse(localStorage.getItem('jarvis_machines') || '[]'); },
+      set machines(v) { localStorage.setItem('jarvis_machines', JSON.stringify(v)); },
+      get activeMachine() { return localStorage.getItem('jarvis_active_machine') || ''; },
+      set activeMachine(v) { localStorage.setItem('jarvis_active_machine', v); },
+      get templates() { return JSON.parse(localStorage.getItem('jarvis_templates') || '[]'); },
+      set templates(v) { localStorage.setItem('jarvis_templates', JSON.stringify(v)); },
+      lastAttach(mid) { return localStorage.getItem('jarvis_last_attach_' + mid) || ''; },
+      setLastAttach(mid, v) { localStorage.setItem('jarvis_last_attach_' + mid, v); },
     };
-    const el = (id) => document.getElementById(id);
+
+    let machine = null;
+    let termSessions = [];
+    let chatSessions = [];
+    let attached = null;          // {kind:'term'|'chat', id}
+    let engine = 'chat';
+    let engineInfo = {};
+    let ws = null;
+    let wsManualClose = false;
+    let lastSeq = 0;
+    let reconnectTimer = null;
+    let editingMachineId = null;
+    const permissionCards = {};   // request_id -> element
+
+    const $ = id => document.getElementById(id);
+
+    // ================= Terminal =================
+    const term = new Terminal({
+      fontSize: 12,
+      fontFamily: 'Menlo, Consolas, "DejaVu Sans Mono", monospace',
+      cursorBlink: true,
+      scrollback: 5000,
+      theme: { background: '#06080a' },
+    });
+    const fit = new FitAddon.FitAddon();
+    term.loadAddon(fit);
+    term.open($('terminal'));
+    term.onData(d => { if (attached?.kind === 'term') wsSend({ t: 'i', d }); });
+
+    function refit() {
+      try { fit.fit(); } catch (e) {}
+      if (attached?.kind === 'term' && ws && ws.readyState === 1) {
+        wsSend({ t: 'resize', cols: term.cols, rows: term.rows });
+      }
+    }
+    window.addEventListener('resize', () => setTimeout(refit, 150));
+    if (window.visualViewport) visualViewport.addEventListener('resize', () => setTimeout(refit, 150));
+
+    // ================= Helpers =================
+    function toast(msg, ms = 3200) {
+      const el = $('toast');
+      el.textContent = msg;
+      el.style.display = 'block';
+      clearTimeout(el._t);
+      el._t = setTimeout(() => el.style.display = 'none', ms);
+    }
+
+    function esc(s) {
+      return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function renderMarkdownLite(text) {
+      // escape dulu, lalu code fence & inline code
+      let safe = esc(text);
+      safe = safe.replace(/```(\w*)\n([\s\S]*?)```/g, (m, lang, code) => `<pre>${code}</pre>`);
+      safe = safe.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+      safe = safe.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
+      return safe;
+    }
+
+    function baseUrl() { return machine ? machine.url.replace(/\/+$/, '') : ''; }
 
     async function api(path, options = {}) {
-      const headers = options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' };
-      const response = await fetch(path, { ...options, headers: { ...headers, ...(options.headers || {}) } });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.detail || 'Request gagal');
-      return data;
-    }
-
-    function escapeHtml(value) {
-      return String(value).replace(/[&<>"']/g, (char) => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
-      })[char]);
-    }
-
-    function showError(error) {
-      el('toast').textContent = error.message || String(error);
-      el('toast').classList.add('open');
-      clearTimeout(window.toastTimer);
-      window.toastTimer = setTimeout(() => el('toast').classList.remove('open'), 4500);
-    }
-
-    function renderMessages() {
-      const messages = el('messages');
-      messages.innerHTML = state.entries.length ? state.entries.map((entry) => {
-        if (entry.type === 'user') return `<div class="message user">${escapeHtml(entry.text)}</div>`;
-        return `<div class="message output"><pre>${ansi.ansi_to_html(entry.text)}</pre></div>`;
-      }).join('') : '<div class="empty">Output Codex akan tampil di sini.</div>';
-      el('terminal').scrollTop = el('terminal').scrollHeight;
-    }
-
-    function appendOutput(text) {
-      const last = state.entries[state.entries.length - 1];
-      if (last && last.type === 'output') last.text += text;
-      else state.entries.push({ type: 'output', text });
-
-      let outputLength = state.entries.reduce((sum, entry) => sum + entry.text.length, 0);
-      while (outputLength > 160000 && state.entries.length > 1) {
-        outputLength -= state.entries.shift().text.length;
+      if (!machine) throw new Error('Pilih mesin dulu');
+      options.headers = Object.assign({ 'Authorization': 'Bearer ' + machine.token }, options.headers || {});
+      const res = await fetch(baseUrl() + path, options);
+      if (!res.ok) {
+        let detail = res.status + ' ' + res.statusText;
+        try { detail = (await res.json()).detail || detail; } catch (e) {}
+        throw new Error(detail);
       }
-      renderMessages();
-      setBusy(text.trim() ? 'memproses...' : 'idle');
-      clearTimeout(window.busyTimer);
-      window.busyTimer = setTimeout(() => setBusy('idle'), 2500);
+      return res.json();
     }
 
-    function appendUser(text) {
-      state.entries.push({ type: 'user', text });
-      renderMessages();
+    function apiJson(path, body, method = 'POST') {
+      return api(path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     }
 
-    function clearOutput() {
-      state.entries = [];
-      renderMessages();
+    // ================= Machines =================
+    function renderMachineChip(online) {
+      $('machineName').textContent = machine ? machine.name : '+ Mesin';
+      $('machineDot').className = 'dot' + (online ? ' on' : '');
     }
 
-    function setBusy(text) { el('busyText').textContent = text; }
-
-    function setDot(id, stateName) {
-      el(id).className = `dot ${stateName || ''}`.trim();
+    async function selectMachine(id) {
+      machine = store.machines.find(m => m.id === id) || null;
+      store.activeMachine = machine ? machine.id : '';
+      detach();
+      termSessions = []; chatSessions = [];
+      renderSessionSelect();
+      renderMachineChip(false);
+      if (machine) await refreshStatus(true);
     }
 
-    function setBackend(online) {
-      setDot('backendDot', online ? 'ok' : '');
-      setDot('backendPopupDot', online ? 'ok' : '');
-      el('backendText').textContent = online ? 'Backend online' : 'Backend offline';
+    async function refreshStatus(autoAttach = false) {
+      if (!machine) return;
+      try {
+        const data = await api('/api/status');
+        engineInfo = data.engines || {};
+        termSessions = data.sessions || [];
+        chatSessions = data.chats || [];
+        renderMachineChip(true);
+        renderEngineSeg();
+        renderSessionSelect();
+        if (autoAttach && !attached) {
+          const last = store.lastAttach(machine.id); // "c:id" / "t:id"
+          const candidates = [
+            ...chatSessions.filter(c => c.status !== 'closed').map(c => 'c:' + c.id),
+            ...termSessions.filter(s => s.status === 'running').map(s => 't:' + s.id),
+          ];
+          const target = candidates.includes(last) ? last : candidates[0];
+          if (target) attachByValue(target);
+        }
+      } catch (e) {
+        renderMachineChip(false);
+        toast('Mesin tidak terjangkau: ' + e.message);
+      }
     }
 
-    function connectWs() {
-      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      state.ws = new WebSocket(`${protocol}//${location.host}/ws/output`);
-      state.ws.onmessage = (event) => appendOutput(event.data);
-      state.ws.onopen = () => setBackend(true);
-      state.ws.onclose = () => {
-        setBackend(false);
-        setTimeout(connectWs, 3000);
+    function renderMachineList() {
+      const wrap = $('machineList');
+      wrap.innerHTML = '';
+      for (const m of store.machines) {
+        const div = document.createElement('div');
+        div.className = 'item' + (machine && machine.id === m.id ? ' active' : '');
+        div.innerHTML = `<div class="grow"><div class="name"></div><div class="sub"></div></div>
+                         <span class="tag edit">✎</span><span class="tag del">🗑</span>`;
+        div.querySelector('.name').textContent = m.name;
+        div.querySelector('.sub').textContent = m.url;
+        div.addEventListener('click', async (ev) => {
+          if (ev.target.classList.contains('edit')) {
+            editingMachineId = m.id;
+            $('mName').value = m.name; $('mUrl').value = m.url; $('mToken').value = m.token;
+            return;
+          }
+          if (ev.target.classList.contains('del')) {
+            if (!confirm('Hapus mesin ' + m.name + '?')) return;
+            store.machines = store.machines.filter(x => x.id !== m.id);
+            if (machine && machine.id === m.id) await selectMachine('');
+            renderMachineList();
+            return;
+          }
+          await selectMachine(m.id);
+          renderMachineList();
+          $('machineOverlay').classList.remove('open');
+        });
+        wrap.appendChild(div);
+      }
+    }
+
+    $('machineBtn').addEventListener('click', () => {
+      renderMachineList();
+      $('machineOverlay').classList.add('open');
+    });
+
+    $('saveMachine').addEventListener('click', async () => {
+      const name = $('mName').value.trim();
+      const url = $('mUrl').value.trim().replace(/\/+$/, '');
+      const token = $('mToken').value.trim();
+      if (!name || !url || !token) { toast('Nama, URL, dan token wajib diisi'); return; }
+      const machines = store.machines;
+      if (editingMachineId) {
+        Object.assign(machines.find(x => x.id === editingMachineId), { name, url, token });
+      } else {
+        machines.push({ id: 'm' + Date.now(), name, url, token });
+      }
+      store.machines = machines;
+      const targetId = editingMachineId || machines[machines.length - 1].id;
+      editingMachineId = null;
+      $('mName').value = $('mUrl').value = $('mToken').value = '';
+      await selectMachine(targetId);
+      renderMachineList();
+      toast('Mesin tersimpan: ' + name);
+    });
+
+    $('cancelEdit').addEventListener('click', () => {
+      editingMachineId = null;
+      $('mName').value = $('mUrl').value = $('mToken').value = '';
+    });
+
+    // ================= Session select & attach =================
+    function renderSessionSelect() {
+      const sel = $('sessionSelect');
+      sel.innerHTML = '';
+      const options = [];
+      for (const c of chatSessions.filter(c => c.status !== 'closed')) {
+        options.push({ value: 'c:' + c.id, label: `💬 ${c.project}` });
+      }
+      for (const s of termSessions.filter(s => s.status === 'running')) {
+        options.push({ value: 't:' + s.id, label: `⌨ ${s.engine} · ${s.project}` });
+      }
+      if (!options.length) options.push({ value: '', label: '— tidak ada sesi —' });
+      for (const o of options) {
+        const opt = document.createElement('option');
+        opt.value = o.value; opt.textContent = o.label;
+        sel.appendChild(opt);
+      }
+      const current = attached ? (attached.kind === 'chat' ? 'c:' : 't:') + attached.id : '';
+      sel.value = options.some(o => o.value === current) ? current : (options[0] ? options[0].value : '');
+    }
+
+    $('sessionSelect').addEventListener('change', e => {
+      if (e.target.value) attachByValue(e.target.value);
+    });
+
+    function attachByValue(value) {
+      const [kind, id] = value.split(':');
+      if (kind === 'c') attachChat(id);
+      else attachTerm(id);
+    }
+
+    function wsSend(obj) {
+      if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
+    }
+
+    function detach() {
+      clearTimeout(reconnectTimer);
+      if (ws) { wsManualClose = true; ws.close(); ws = null; }
+      attached = null;
+      lastSeq = 0;
+    }
+
+    function setMode(kind) {
+      const isChat = kind === 'chat';
+      $('chatwrap').style.display = isChat ? 'flex' : 'none';
+      $('terminal').style.display = isChat ? 'none' : 'block';
+      $('quickkeys').style.display = isChat ? 'none' : 'flex';
+      $('chatbar').style.display = isChat ? 'flex' : 'none';
+      $('emptyState').style.display = 'none';
+      $('promptInput').placeholder = isChat ? 'Prompt untuk Claude…' : 'Ketik perintah…';
+    }
+
+    function openWs(path, onMessage, onReconnect) {
+      const wsBase = baseUrl().replace(/^http/, 'ws');
+      wsManualClose = false;
+      ws = new WebSocket(`${wsBase}${path}`);
+      ws.onmessage = ev => onMessage(JSON.parse(ev.data));
+      ws.onopen = () => renderSessionSelect();
+      ws.onclose = () => {
+        if (wsManualClose) return;
+        toast('Koneksi putus, mencoba ulang…', 1800);
+        reconnectTimer = setTimeout(onReconnect, 2000);
       };
     }
 
-    async function loadStatus() {
-      try {
-        const status = await api('/api/status');
-        state.status = status;
-        setBackend(true);
-        const codexState = status.codex.running ? 'ok' : '';
-        setDot('codexDot', codexState);
-        setDot('codexPopupDot', codexState);
-        el('codexText').textContent = status.codex.busy ? 'Codex sedang memproses' : (status.codex.running ? 'Codex ready' : 'Codex mati');
-        updateWhisperStatus(status.whisper);
-        const project = status.active_project;
-        el('activeProject').textContent = project ? project.name : 'Belum ada project';
-        el('activeProjectMeta').textContent = project ? `${project.type} - ${project.path}` : status.codex.error || '-';
-      } catch (error) {
-        setBackend(false);
-      }
+    // ---- Terminal attach ----
+    function attachTerm(sessionId, since = 0) {
+      detach();
+      attached = { kind: 'term', id: sessionId };
+      store.setLastAttach(machine.id, 't:' + sessionId);
+      setMode('term');
+      if (since === 0) term.reset();
+
+      openWs(`/ws/session/${sessionId}?token=${encodeURIComponent(machine.token)}&since=${since}`,
+        frame => {
+          if (frame.t === 'o') {
+            if (frame.d) term.write(frame.d);
+            lastSeq = frame.s;
+          } else if (frame.t === 'exit') {
+            term.write(`\r\n\x1b[33m[JARVIS] Sesi berakhir (exit ${frame.code}).\x1b[0m\r\n`);
+            wsManualClose = true;
+            refreshStatus();
+          }
+        },
+        () => { if (attached?.kind === 'term' && attached.id === sessionId) attachTerm(sessionId, lastSeq); });
+      ws.addEventListener('open', refit);
     }
 
-    function updateWhisperStatus(whisper) {
-      const stateName = whisper.loaded ? 'ok' : (whisper.loading ? 'warn' : '');
-      setDot('whisperDot', stateName);
-      setDot('whisperPopupDot', stateName);
-      el('whisperText').textContent = whisper.loaded
-        ? `Whisper ready (${whisper.model_size || '-'})`
-        : whisper.loading
-          ? `Whisper loading (${whisper.model_size || '-'})`
-          : whisper.error ? `Whisper error: ${whisper.error}` : 'Whisper belum siap';
+    // ---- Chat attach ----
+    function attachChat(chatId, since = 0) {
+      detach();
+      attached = { kind: 'chat', id: chatId };
+      store.setLastAttach(machine.id, 'c:' + chatId);
+      setMode('chat');
+      if (since === 0) { $('chatwrap').innerHTML = ''; Object.keys(permissionCards).forEach(k => delete permissionCards[k]); }
+
+      openWs(`/ws/chat/${chatId}?token=${encodeURIComponent(machine.token)}&since=${since}`,
+        event => {
+          if (event.t === 'hello') { applyChatInfo(event.info); return; }
+          if (typeof event.i === 'number') lastSeq = event.i + 1;
+          renderChatEvent(event);
+        },
+        () => { if (attached?.kind === 'chat' && attached.id === chatId) attachChat(chatId, lastSeq); });
     }
 
-    async function loadProjects() {
-      const data = await api('/api/projects');
-      state.projects = data.projects || [];
-      renderProjects();
+    function applyChatInfo(info) {
+      setChatStatus(info.status);
+      updateAutoAllowPills(info.auto_allow || {});
     }
 
-    function renderProjects() {
-      const query = el('projectSearch').value.trim().toLowerCase();
-      const filtered = state.projects.filter((project) =>
-        !query || `${project.name} ${project.path} ${project.type}`.toLowerCase().includes(query)
-      );
-      const groups = filtered.reduce((acc, project) => {
-        const key = project.root || 'custom';
-        (acc[key] ||= []).push(project);
-        return acc;
-      }, {});
+    function setChatStatus(status) {
+      const el = $('chatStatus');
+      const map = {
+        idle: ['✓ siap', ''],
+        running: ['⏳ bekerja…', 'running'],
+        waiting_permission: ['🔐 butuh izin', 'waiting'],
+        starting: ['memulai…', 'running'],
+        error: ['⚠ error', 'waiting'],
+        closed: ['ditutup', ''],
+      };
+      const [label, cls] = map[status] || [status, ''];
+      el.textContent = label;
+      el.className = cls;
+      $('interruptBtn').disabled = !(status === 'running' || status === 'waiting_permission');
+    }
 
-      el('projectList').innerHTML = Object.entries(groups).map(([root, items]) => `
-        <div class="group">
-          <div class="group-title">${escapeHtml(root)}</div>
-          ${items.map((project) => `
-            <button class="project-item" data-path="${escapeHtml(project.path)}">
-              <span><strong>${escapeHtml(project.name)}</strong><span class="small">${escapeHtml(project.path)}</span></span>
-              <span class="badge">${escapeHtml(project.type)}</span>
-            </button>
-          `).join('')}
-        </div>
-      `).join('') || '<div class="small">Project tidak ditemukan.</div>';
-
-      document.querySelectorAll('.project-item').forEach((button) => {
-        button.addEventListener('click', () => switchProject(button.dataset.path).catch(showError));
+    function updateAutoAllowPills(flags) {
+      document.querySelectorAll('#chatbar .pill[data-flag]').forEach(btn => {
+        btn.classList.toggle('on', !!flags[btn.dataset.flag]);
       });
     }
 
-    async function switchProject(path) {
-      clearOutput();
-      await api('/api/switch-project', { method: 'POST', body: JSON.stringify({ path }) });
-      closeDrawer();
-      await loadStatus();
+    // ================= Chat rendering =================
+    function chatAppend(el) {
+      const wrap = $('chatwrap');
+      const nearBottom = wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight < 120;
+      wrap.appendChild(el);
+      if (nearBottom) wrap.scrollTop = wrap.scrollHeight;
     }
 
-    async function refreshProjects() {
-      const data = await api('/api/projects/refresh', { method: 'POST', body: '{}' });
-      state.projects = data.projects || [];
-      renderProjects();
-      await loadStatus();
+    function toolSummary(name, input) {
+      input = input || {};
+      if (name === 'Bash') return input.command || '';
+      if (input.file_path) return input.file_path;
+      if (name === 'Grep') return input.pattern || '';
+      if (name === 'WebFetch' || name === 'WebSearch') return input.url || input.query || '';
+      const first = Object.values(input)[0];
+      return typeof first === 'string' ? first.slice(0, 120) : '';
     }
 
-    async function addManualProject() {
-      const path = el('manualPath').value.trim();
-      if (!path) return;
-      await api('/api/projects/custom', { method: 'POST', body: JSON.stringify({ path }) });
-      await loadProjects();
-      await switchProject(path);
+    function diffHtml(input) {
+      if (input && typeof input.old_string === 'string' && typeof input.new_string === 'string') {
+        return `<div class="diff"><div class="old">− ${esc(input.old_string.slice(0, 3000))}</div>` +
+               `<div class="new">+ ${esc(input.new_string.slice(0, 3000))}</div></div>`;
+      }
+      if (input && typeof input.content === 'string') {
+        return `<div class="diff"><div class="new">+ ${esc(input.content.slice(0, 3000))}</div></div>`;
+      }
+      return '';
     }
 
-    async function runProjectCommand() {
-      const text = el('projectCommand').value.trim();
-      if (!text) return;
-      const data = await api('/api/projects/command', { method: 'POST', body: JSON.stringify({ text }) });
-      state.projects = data.projects || [];
-      el('projectCommand').value = '';
-      renderProjects();
-      await switchProject(data.project.path);
-    }
-
-    async function sendPrompt() {
-      const input = el('promptInput');
-      const text = input.value.trim();
-      if (!text) return;
-      appendUser(text);
-      input.value = '';
-      resizePrompt();
-      try {
-        await api('/api/send', { method: 'POST', body: JSON.stringify({ text }) });
-      } catch (error) {
-        appendOutput(`[JARVIS] ${error.message}\n`);
-        showError(error);
+    function renderChatEvent(ev) {
+      switch (ev.t) {
+        case 'user': {
+          const div = document.createElement('div');
+          div.className = 'msg user';
+          div.textContent = ev.text;
+          chatAppend(div);
+          break;
+        }
+        case 'text': {
+          const div = document.createElement('div');
+          div.className = 'msg ai';
+          div.innerHTML = renderMarkdownLite(ev.text);
+          chatAppend(div);
+          break;
+        }
+        case 'thinking': {
+          const det = document.createElement('details');
+          det.className = 'thinking';
+          det.innerHTML = `<summary>🧠 thinking…</summary><div class="body"></div>`;
+          det.querySelector('.body').textContent = ev.text;
+          chatAppend(det);
+          break;
+        }
+        case 'tool_use': {
+          const div = document.createElement('div');
+          div.className = 'card';
+          const summary = toolSummary(ev.name, ev.input);
+          div.innerHTML = `<div class="head">🔧 <b>${esc(ev.name)}</b></div>` +
+            (summary ? `<div class="sub">${esc(summary.slice(0, 300))}</div>` : '') +
+            ((ev.name === 'Edit' || ev.name === 'Write') ? diffHtml(ev.input) : '') +
+            `<details><summary>detail input</summary><pre>${esc(JSON.stringify(ev.input, null, 2).slice(0, 4000))}</pre></details>`;
+          chatAppend(div);
+          break;
+        }
+        case 'tool_result': {
+          if (!ev.content) break;
+          const det = document.createElement('details');
+          det.className = 'card';
+          det.style.padding = '6px 11px';
+          det.innerHTML = `<summary style="color:${ev.is_error ? 'var(--danger)' : 'var(--muted)'};font-size:12px;cursor:pointer">` +
+            `${ev.is_error ? '✖ hasil (error)' : '↳ hasil'}</summary><pre></pre>`;
+          det.querySelector('pre').textContent = ev.content.slice(0, 6000);
+          chatAppend(det);
+          break;
+        }
+        case 'permission_request': {
+          const div = document.createElement('div');
+          div.className = 'card permission';
+          const summary = toolSummary(ev.tool, ev.input);
+          div.innerHTML = `<div class="head">🔐 <b>Izinkan ${esc(ev.tool)}?</b></div>` +
+            (summary ? `<div class="sub">${esc(summary.slice(0, 400))}</div>` : '') +
+            ((ev.tool === 'Edit' || ev.tool === 'Write') ? diffHtml(ev.input) : '') +
+            `<details><summary>detail</summary><pre>${esc(JSON.stringify(ev.input, null, 2).slice(0, 4000))}</pre></details>` +
+            `<div class="actions">
+               <button class="btn-allow" data-d="allow">✅ Izinkan</button>
+               <button class="btn-deny" data-d="deny">❌ Tolak</button>
+               <button data-d="allow_always">♾ Selalu</button>
+             </div>`;
+          div.querySelectorAll('.actions button').forEach(btn => {
+            btn.addEventListener('click', () => {
+              wsSend({ t: 'permission', id: ev.id, decision: btn.dataset.d });
+            });
+          });
+          permissionCards[ev.id] = div;
+          chatAppend(div);
+          if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
+          break;
+        }
+        case 'permission_result': {
+          const card = permissionCards[ev.id];
+          if (card) {
+            const actions = card.querySelector('.actions');
+            if (actions) {
+              const ok = ev.decision !== 'deny';
+              actions.innerHTML = `<span class="badge ${ok ? 'ok' : 'no'}">` +
+                (ev.decision === 'allow' ? '✅ Diizinkan' : ev.decision === 'allow_always' ? '♾ Selalu diizinkan' : '❌ Ditolak') + '</span>';
+            }
+          }
+          break;
+        }
+        case 'result': {
+          const div = document.createElement('div');
+          div.className = 'divider' + (ev.is_error ? ' err' : '');
+          const secs = ((ev.duration_ms || 0) / 1000).toFixed(0);
+          const cost = ev.cost_usd ? ` · $${ev.cost_usd.toFixed(3)}` : '';
+          div.textContent = ev.is_error ? `⚠ ${ev.subtype}` : `— selesai · ${secs}s${cost} —`;
+          chatAppend(div);
+          break;
+        }
+        case 'status':
+          setChatStatus(ev.status);
+          break;
+        case 'auto_allow':
+          updateAutoAllowPills(ev.flags || {});
+          break;
+        case 'error': {
+          const div = document.createElement('div');
+          div.className = 'card';
+          div.style.borderColor = 'var(--danger)';
+          div.innerHTML = `<div class="head">⚠ <b>Error</b></div><div class="sub"></div>`;
+          div.querySelector('.sub').textContent = ev.message;
+          chatAppend(div);
+          break;
+        }
       }
     }
 
-    async function toggleRecording() {
-      if (state.mediaRecorder && state.mediaRecorder.state === 'recording') {
-        state.mediaRecorder.stop();
+    // ---- chatbar actions ----
+    $('interruptBtn').addEventListener('click', () => {
+      if (attached?.kind === 'chat') wsSend({ t: 'interrupt' });
+    });
+
+    document.querySelectorAll('#chatbar .pill[data-flag]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (attached?.kind !== 'chat') return;
+        const flag = btn.dataset.flag;
+        const next = !btn.classList.contains('on');
+        try {
+          await apiJson(`/api/chat/${attached.id}/auto-allow`, { [flag]: next });
+        } catch (e) { toast(e.message); }
+      });
+    });
+
+    // ================= Start sessions =================
+    async function startSession(path) {
+      const info = engineInfo[engine];
+      if (info && !info.available) { toast(`Mode ${engine} tidak tersedia:\n${info.error || ''}`); return; }
+      try {
+        if (engine === 'chat') {
+          const data = await apiJson('/api/chat', { path });
+          await refreshStatus();
+          attachChat(data.chat.id);
+          toast('Chat Claude dimulai');
+        } else {
+          refit();
+          const data = await apiJson('/api/sessions', { engine, path, cols: term.cols || 80, rows: term.rows || 24 });
+          await refreshStatus();
+          attachTerm(data.session.id);
+          toast(`Sesi ${engine} dimulai`);
+        }
+        $('projectOverlay').classList.remove('open');
+      } catch (e) {
+        toast('Gagal start sesi: ' + e.message);
+      }
+    }
+
+    async function resumeChat(resumeId) {
+      try {
+        const data = await apiJson('/api/chat', { resume_id: resumeId });
+        await refreshStatus();
+        attachChat(data.chat.id);
+        $('projectOverlay').classList.remove('open');
+        toast('Chat dilanjutkan');
+      } catch (e) { toast('Gagal resume: ' + e.message); }
+    }
+
+    $('stopBtn').addEventListener('click', async () => {
+      if (!attached) return;
+      try {
+        if (attached.kind === 'chat') {
+          if (!confirm('Tutup sesi chat ini? (riwayat tetap tersimpan & bisa dilanjutkan)')) return;
+          await api('/api/chat/' + attached.id, { method: 'DELETE' });
+        } else {
+          if (!confirm('Stop sesi terminal ini?')) return;
+          await api('/api/sessions/' + attached.id, { method: 'DELETE' });
+        }
+        detach();
+        $('chatwrap').style.display = 'none';
+        $('terminal').style.display = 'block';
+        await refreshStatus(true);
+        toast('Sesi ditutup');
+      } catch (e) { toast(e.message); }
+    });
+
+    // ================= Projects drawer =================
+    $('projectsBtn').addEventListener('click', async () => {
+      if (!machine) { $('machineOverlay').classList.add('open'); renderMachineList(); return; }
+      $('drawerMachine').textContent = machine.name;
+      $('gitPath').textContent = attachedPath() || '(tidak ada sesi aktif)';
+      $('projectOverlay').classList.add('open');
+      loadProjects();
+      loadChatHistory();
+    });
+
+    function attachedPath() {
+      if (!attached) return '';
+      const list = attached.kind === 'chat' ? chatSessions : termSessions;
+      const found = list.find(x => x.id === attached.id);
+      return found ? found.path : '';
+    }
+
+    async function loadProjects(refresh = false) {
+      try {
+        const data = refresh ? await apiJson('/api/projects/refresh', {}) : await api('/api/projects');
+        renderProjects(data.projects || []);
+      } catch (e) { toast(e.message); }
+    }
+
+    function renderProjects(list) {
+      const wrap = $('projectList');
+      wrap.innerHTML = '';
+      for (const p of list) {
+        const div = document.createElement('div');
+        div.className = 'item';
+        div.innerHTML = `<div class="grow"><div class="name"></div><div class="sub"></div></div><span class="tag"></span>`;
+        div.querySelector('.name').textContent = p.name;
+        div.querySelector('.sub').textContent = p.path;
+        div.querySelector('.tag').textContent = p.type;
+        div.addEventListener('click', () => {
+          const label = engine === 'chat' ? 'Chat Claude' : engine;
+          if (confirm(`Mulai ${label} di "${p.name}"?`)) startSession(p.path);
+        });
+        wrap.appendChild(div);
+      }
+    }
+
+    async function loadChatHistory() {
+      try {
+        const data = await api('/api/chat');
+        const wrap = $('chatHistory');
+        wrap.innerHTML = '';
+        const items = data.recent || [];
+        if (!items.length) {
+          wrap.innerHTML = '<div class="muted">Belum ada riwayat.</div>';
+          return;
+        }
+        for (const c of items) {
+          const div = document.createElement('div');
+          div.className = 'item';
+          div.innerHTML = `<div class="grow"><div class="name"></div><div class="sub"></div></div><span class="tag del">🗑</span>`;
+          div.querySelector('.name').textContent = `💬 ${c.project}`;
+          div.querySelector('.sub').textContent = c.last_prompt || c.project_path;
+          div.addEventListener('click', async (ev) => {
+            if (ev.target.classList.contains('del')) {
+              if (!confirm('Hapus riwayat chat ini?')) return;
+              try {
+                await api(`/api/chat/${c.id}?delete_history=true`, { method: 'DELETE' });
+                loadChatHistory();
+              } catch (e) { toast(e.message); }
+              return;
+            }
+            resumeChat(c.id);
+          });
+          wrap.appendChild(div);
+        }
+      } catch (e) { /* riwayat opsional */ }
+    }
+
+    function renderEngineSeg() {
+      document.querySelectorAll('#engineSeg button').forEach(btn => {
+        const info = engineInfo[btn.dataset.engine];
+        btn.classList.toggle('unavailable', !!(info && !info.available));
+      });
+    }
+
+    document.querySelectorAll('#engineSeg button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        engine = btn.dataset.engine;
+        document.querySelectorAll('#engineSeg button').forEach(b => b.classList.toggle('active', b === btn));
+      });
+    });
+
+    $('refreshProjects').addEventListener('click', () => loadProjects(true));
+
+    $('addPathBtn').addEventListener('click', async () => {
+      const path = $('customPath').value.trim();
+      if (!path) return;
+      try {
+        const data = await apiJson('/api/projects/custom', { path });
+        $('customPath').value = '';
+        renderProjects(data.projects || []);
+      } catch (e) { toast(e.message); }
+    });
+
+    $('mkdirBtn').addEventListener('click', async () => {
+      const text = $('mkdirPath').value.trim();
+      if (!text) return;
+      try {
+        const data = await apiJson('/api/projects/command', { text });
+        $('mkdirPath').value = '';
+        renderProjects(data.projects || []);
+        toast('Folder dibuat: ' + data.project.path);
+      } catch (e) { toast(e.message); }
+    });
+
+    // ---- Git panel ----
+    async function runGit(cmd, message = '') {
+      const path = attachedPath();
+      if (!path) { toast('Buka sesi dulu untuk memilih project git'); return; }
+      const out = $('gitOutput');
+      out.style.display = 'block';
+      out.textContent = '… menjalankan git ' + cmd;
+      try {
+        const data = await apiJson('/api/git', { path, cmd, message });
+        out.textContent = data.output;
+      } catch (e) { out.textContent = 'Error: ' + e.message; }
+    }
+
+    document.querySelectorAll('[data-git]').forEach(btn => {
+      btn.addEventListener('click', () => runGit(btn.dataset.git));
+    });
+
+    $('commitBtn').addEventListener('click', () => {
+      const msg = $('commitMsg').value.trim();
+      if (!msg) { toast('Isi pesan commit dulu'); return; }
+      runGit('commit', msg);
+      $('commitMsg').value = '';
+    });
+
+    for (const id of ['projectOverlay', 'machineOverlay']) {
+      $(id).addEventListener('click', e => { if (e.target === $(id)) $(id).classList.remove('open'); });
+    }
+
+    // ================= Quick keys =================
+    $('quickkeys').addEventListener('click', e => {
+      const btn = e.target.closest('button');
+      if (!btn || attached?.kind !== 'term') return;
+      if (btn.dataset.key) wsSend({ t: 'key', k: btn.dataset.key });
+      else if (btn.dataset.lit) wsSend({ t: 'i', d: btn.dataset.lit });
+    });
+
+    // ================= Templates =================
+    function renderTemplates() {
+      const wrap = $('templates');
+      wrap.innerHTML = '';
+      for (const [idx, tpl] of store.templates.entries()) {
+        const btn = document.createElement('button');
+        btn.textContent = tpl;
+        btn.title = tpl;
+        let pressTimer;
+        btn.addEventListener('touchstart', () => {
+          pressTimer = setTimeout(() => {
+            if (confirm('Hapus template ini?\n' + tpl)) {
+              const list = store.templates; list.splice(idx, 1); store.templates = list;
+              renderTemplates();
+            }
+          }, 650);
+        });
+        btn.addEventListener('touchend', () => clearTimeout(pressTimer));
+        btn.addEventListener('click', () => {
+          const input = $('promptInput');
+          input.value = (input.value ? input.value + ' ' : '') + tpl;
+          input.dispatchEvent(new Event('input'));
+        });
+        wrap.appendChild(btn);
+      }
+      const add = document.createElement('button');
+      add.textContent = '＋ simpan';
+      add.addEventListener('click', () => {
+        const text = $('promptInput').value.trim();
+        if (!text) { toast('Ketik dulu teks yang mau disimpan jadi template'); return; }
+        store.templates = [...store.templates, text];
+        renderTemplates();
+        toast('Template disimpan');
+      });
+      wrap.appendChild(add);
+    }
+
+    // ================= Composer =================
+    const promptInput = $('promptInput');
+    promptInput.addEventListener('input', () => {
+      promptInput.style.height = 'auto';
+      promptInput.style.height = Math.min(promptInput.scrollHeight, 110) + 'px';
+    });
+
+    $('sendBtn').addEventListener('click', () => {
+      if (!attached) { toast('Belum ada sesi aktif'); return; }
+      const text = promptInput.value;
+      if (attached.kind === 'chat') {
+        if (!text.trim()) return;
+        wsSend({ t: 'prompt', text });
+      } else {
+        wsSend({ t: 'i', d: (text || '') + '\r' });
+      }
+      promptInput.value = '';
+      promptInput.style.height = 'auto';
+    });
+
+    // ================= Voice =================
+    let recorder = null;
+    let chunks = [];
+
+    $('micBtn').addEventListener('click', async () => {
+      if (recorder && recorder.state === 'recording') { recorder.stop(); return; }
+      if (!machine) { toast('Pilih mesin dulu'); return; }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        chunks = [];
+        recorder = new MediaRecorder(stream);
+        recorder.ondataavailable = e => chunks.push(e.data);
+        recorder.onstop = async () => {
+          stream.getTracks().forEach(t => t.stop());
+          $('micBtn').classList.remove('recording');
+          const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+          const form = new FormData();
+          form.append('file', blob, 'voice.webm');
+          toast('Transkripsi…');
+          try {
+            const data = await api('/api/transcribe', { method: 'POST', body: form });
+            promptInput.value = (promptInput.value ? promptInput.value + ' ' : '') + (data.text || '');
+            promptInput.dispatchEvent(new Event('input'));
+            toast('✔ ' + (data.text || '(kosong)'));
+          } catch (e) { toast('Transkripsi gagal: ' + e.message); }
+        };
+        recorder.start();
+        $('micBtn').classList.add('recording');
+      } catch (e) { toast('Mic gagal: ' + e.message); }
+    });
+
+    // ================= Init =================
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+
+    (async function init() {
+      renderTemplates();
+      const machines = store.machines;
+      if (!machines.length) {
+        if (location.origin.startsWith('http')) $('mUrl').value = location.origin;
+        $('machineOverlay').classList.add('open');
+        renderMachineList();
         return;
       }
-      if (!navigator.mediaDevices?.getUserMedia) throw new Error('Mic perlu HTTPS atau localhost. Gunakan URL HTTPS untuk akses dari HP.');
-      if (!window.MediaRecorder) throw new Error('Browser ini tidak mendukung MediaRecorder.');
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      state.chunks = [];
-      state.mediaRecorder = new MediaRecorder(stream);
-      state.mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) state.chunks.push(event.data);
-      };
-      state.mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach((track) => track.stop());
-        el('micButton').classList.remove('recording');
-        try { await uploadAudio(); } catch (error) { showError(error); }
-      };
-      state.mediaRecorder.start();
-      el('micButton').classList.add('recording');
-    }
-
-    async function uploadAudio() {
-      const form = new FormData();
-      form.append('file', new Blob(state.chunks, { type: 'audio/webm' }), 'voice.webm');
-      setBusy('transkripsi...');
-      const autoSend = el('autoSend').checked;
-      const data = await api(autoSend ? '/api/transcribe-and-send' : '/api/transcribe', { method: 'POST', body: form });
-      el('promptInput').value = data.text || '';
-      resizePrompt();
-      if (autoSend && data.text) {
-        appendUser(data.text);
-        el('promptInput').value = '';
-        resizePrompt();
-      }
-      if (autoSend && data.sent === false) appendOutput('[JARVIS] Transkripsi selesai, tetapi Codex belum siap.\n');
-      setBusy('idle');
-    }
-
-    function resizePrompt() {
-      const input = el('promptInput');
-      input.style.height = 'auto';
-      input.style.height = `${Math.min(input.scrollHeight, 132)}px`;
-    }
-
-    function openDrawer() {
-      el('projectBackdrop').classList.add('open');
-      el('projectBackdrop').setAttribute('aria-hidden', 'false');
-    }
-
-    function closeDrawer() {
-      el('projectBackdrop').classList.remove('open');
-      el('projectBackdrop').setAttribute('aria-hidden', 'true');
-    }
-
-    el('openProjects').addEventListener('click', openDrawer);
-    el('closeProjects').addEventListener('click', closeDrawer);
-    el('projectBackdrop').addEventListener('click', (event) => {
-      if (event.target === el('projectBackdrop')) closeDrawer();
-    });
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && el('projectBackdrop').classList.contains('open')) closeDrawer();
-    });
-    el('statusButton').addEventListener('click', () => el('statusPopup').classList.toggle('open'));
-    document.addEventListener('click', (event) => {
-      if (!el('statusButton').contains(event.target) && !el('statusPopup').contains(event.target)) el('statusPopup').classList.remove('open');
-    });
-    el('projectSearch').addEventListener('input', renderProjects);
-    el('refreshProjects').addEventListener('click', () => refreshProjects().catch(showError));
-    el('addManual').addEventListener('click', () => addManualProject().catch(showError));
-    el('manualPath').addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') addManualProject().catch(showError);
-    });
-    el('runCommand').addEventListener('click', () => runProjectCommand().catch(showError));
-    el('projectCommand').addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') runProjectCommand().catch(showError);
-    });
-    el('restartCodex').addEventListener('click', async () => {
-      clearOutput();
-      try {
-        await api('/api/restart-codex', { method: 'POST', body: '{}' });
-        closeDrawer();
-        await loadStatus();
-      } catch (error) { showError(error); }
-    });
-    el('sendButton').addEventListener('click', sendPrompt);
-    el('promptInput').addEventListener('input', resizePrompt);
-    el('promptInput').addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' && !event.shiftKey) {
-        event.preventDefault();
-        sendPrompt();
-      }
-    });
-    el('micButton').addEventListener('click', () => toggleRecording().catch(showError));
-
-    connectWs();
-    loadStatus();
-    loadProjects().catch(showError);
-    setInterval(loadStatus, 5000);
+      await selectMachine(store.activeMachine || machines[0].id);
+      setInterval(() => { if (machine && !document.hidden) refreshStatus(); }, 20000);
+    })();
   </script>
 </body>
 </html>
