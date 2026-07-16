@@ -38,6 +38,10 @@ temp/
 *.log
 *.pid
 
+# Data & kunci runtime Jarvis
+backend/jarvis.db*
+backend/vapid_private.pem
+
 # Editor and OS files
 .idea/
 .vscode/

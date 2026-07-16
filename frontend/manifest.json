@@ -4,8 +4,8 @@
   "description": "Kontrol Claude Code & Codex di PC/laptop dari HP",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a0d10",
-  "theme_color": "#12171d",
+  "background_color": "#f4f6fc",
+  "theme_color": "#ffffff",
   "icons": [
     {
       "src": "/icon.svg",

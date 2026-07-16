@@ -24,6 +24,7 @@ import config
 from services import db
 from services.chat_service import ChatManager, ChatSession, sdk_available
 from services.project_service import ProjectService
+from services.push_service import PushService
 from services.session_manager import Session, SessionManager, engines_available
 from services.telegram_service import TelegramService
 from services.whisper_service import WhisperService
@@ -46,6 +47,7 @@ sessions = SessionManager()
 chats = ChatManager()
 whisper = WhisperService()
 telegram = TelegramService(config.TELEGRAM_BOT_TOKEN, config.TELEGRAM_CHAT_ID, config.MACHINE_NAME)
+push = PushService(config.MACHINE_NAME)
 
 
 # ---------- Auth ----------
@@ -122,6 +124,17 @@ class GitPayload(BaseModel):
     message: str = ""
 
 
+class SubscriptionPayload(BaseModel):
+    subscription: dict
+
+
+class PushPermissionPayload(BaseModel):
+    chat_id: str
+    request_id: str
+    decision: str
+    nonce: str
+
+
 # ---------- Lifecycle ----------
 
 @app.on_event("startup")
@@ -159,12 +172,24 @@ async def load_whisper_background():
 
 async def handle_approval(session: Session, excerpt: str):
     await telegram.notify_approval(session.id, session.engine, f"{session.project_name} — {session.project_path}", excerpt)
+    await push.notify(
+        f"🔔 {session.engine} butuh konfirmasi",
+        f"{session.project_name}: {excerpt[-200:]}",
+        data={"kind": "open"},
+        tag=f"term-{session.id}",
+    )
 
 
 async def handle_session_exit(session: Session):
-    await telegram.notify(
-        f"🏁 Sesi {session.engine} di '{session.project_name}' berakhir (exit code {session.exit_code})."
-    )
+    text = f"🏁 Sesi {session.engine} di '{session.project_name}' berakhir (exit code {session.exit_code})."
+    await telegram.notify(text)
+    await push.notify("🏁 Sesi berakhir", text, data={"kind": "open"}, tag=f"term-{session.id}")
+
+
+def permission_nonce(chat_id: str, request_id: str) -> str:
+    return hmac.new(
+        config.AUTH_TOKEN.encode(), f"{chat_id}:{request_id}".encode(), "sha256"
+    ).hexdigest()[:20]
 
 
 async def handle_telegram_input(session_id: str, data: str, is_named_key: bool) -> bool:
@@ -182,15 +207,34 @@ async def handle_chat_permission(chat: ChatSession, request_event: dict):
         chat.id, request_event["id"], request_event["tool"], detail,
         f"{chat.project_name} — {chat.project_path}",
     )
+    await push.notify(
+        f"🔐 Izinkan {request_event['tool']}?",
+        f"{chat.project_name}: {detail[:200]}",
+        data={
+            "kind": "chat_permission",
+            "chat_id": chat.id,
+            "request_id": request_event["id"],
+            "nonce": permission_nonce(chat.id, request_event["id"]),
+        },
+        actions=[
+            {"action": "allow", "title": "✅ Izinkan"},
+            {"action": "deny", "title": "❌ Tolak"},
+        ],
+        tag=f"perm-{chat.id}-{request_event['id']}",
+    )
 
 
 async def handle_chat_turn_done(chat: ChatSession, result_event: dict):
     if result_event.get("is_error"):
-        await telegram.notify(f"⚠️ Chat Claude di '{chat.project_name}' error ({result_event.get('subtype')}).")
+        text = f"⚠️ Chat Claude di '{chat.project_name}' error ({result_event.get('subtype')})."
+        await telegram.notify(text)
+        await push.notify("⚠️ Task error", text, data={"kind": "open"}, tag=f"chat-{chat.id}")
     elif (result_event.get("duration_ms") or 0) > 45_000:
         cost = result_event.get("cost_usd")
         cost_text = f" · ${cost:.2f}" if cost else ""
-        await telegram.notify(f"✅ Task Claude di '{chat.project_name}' selesai{cost_text}.")
+        text = f"✅ Task Claude di '{chat.project_name}' selesai{cost_text}."
+        await telegram.notify(text)
+        await push.notify("✅ Task selesai", text, data={"kind": "open"}, tag=f"chat-{chat.id}")
 
 
 async def handle_telegram_permission(chat_session_id: str, request_id: str, decision: str) -> bool:
@@ -442,6 +486,49 @@ async def close_chat(chat_id: str, delete_history: bool = False):
     closed = await chats.close(chat_id, delete_history=delete_history)
     if not closed:
         raise HTTPException(status_code=404, detail="Sesi chat tidak ditemukan")
+    return {"ok": True}
+
+
+# ---------- Web Push ----------
+
+@api.get("/push/key")
+async def push_key():
+    return {"key": push.public_key}
+
+
+@api.post("/push/subscribe")
+async def push_subscribe(payload: SubscriptionPayload):
+    if not payload.subscription.get("endpoint"):
+        raise HTTPException(status_code=400, detail="Subscription tidak valid")
+    db.save_push_subscription(payload.subscription)
+    return {"ok": True, "total": len(db.list_push_subscriptions())}
+
+
+@api.post("/push/unsubscribe")
+async def push_unsubscribe(payload: SubscriptionPayload):
+    db.delete_push_subscription(payload.subscription.get("endpoint", ""))
+    return {"ok": True}
+
+
+@api.post("/push/test")
+async def push_test():
+    await push.notify("🔔 Tes notifikasi", "Web Push dari Jarvis aktif!", data={"kind": "open"}, tag="test")
+    return {"ok": True, "subscribers": len(db.list_push_subscriptions())}
+
+
+@app.post("/api/push/permission")
+async def push_permission(payload: PushPermissionPayload):
+    """Dipanggil dari tombol notifikasi (service worker) — divalidasi nonce, bukan Bearer."""
+    expected = permission_nonce(payload.chat_id, payload.request_id)
+    if not hmac.compare_digest(payload.nonce, expected):
+        raise HTTPException(status_code=401, detail="Nonce salah")
+    chat = chats.get(payload.chat_id)
+    if not chat:
+        raise HTTPException(status_code=404, detail="Sesi chat tidak ditemukan")
+    if payload.decision not in ("allow", "deny", "allow_always"):
+        raise HTTPException(status_code=400, detail="Decision tidak valid")
+    if not chat.resolve_permission(payload.request_id, payload.decision):
+        raise HTTPException(status_code=409, detail="Permission request sudah tidak aktif")
     return {"ok": True}
 
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#12171d">
+  <meta name="theme-color" content="#ffffff">
   <title>Jarvis Remote</title>
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
@@ -13,18 +13,21 @@
   <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
   <style>
     :root {
-      color-scheme: dark;
-      --bg: #0a0d10;
-      --panel: #12171d;
-      --panel-2: #19212a;
-      --line: #29333e;
-      --text: #edf3f8;
-      --muted: #8d9aa7;
-      --accent: #35c978;
-      --danger: #ff625c;
-      --warn: #f4b942;
-      --blue: #64a9ff;
-      --terminal: #06080a;
+      color-scheme: light;
+      --bg: #f4f6fc;
+      --panel: #ffffff;
+      --panel-2: #eef1fa;
+      --line: #dde3f2;
+      --text: #1d2433;
+      --muted: #69748e;
+      --accent: #2f6bff;   /* biru utama */
+      --purple: #7c3aed;   /* ungu aksen */
+      --ok: #16a34a;
+      --danger: #e5484d;
+      --warn: #b45309;
+      --blue: #7c3aed;     /* fokus & link detail memakai ungu */
+      --terminal: #06080a; /* area terminal tetap gelap agar nyaman dibaca */
+      --grad: linear-gradient(135deg, #2f6bff, #8b5cf6);
     }
 
     * { box-sizing: border-box; }
@@ -33,6 +36,7 @@
       height: 100%;
       margin: 0;
       overflow: hidden;
+      max-width: 100vw;
       background: var(--bg);
       color: var(--text);
       font-family: Inter, Segoe UI, system-ui, -apple-system, sans-serif;
@@ -40,11 +44,25 @@
 
     button, input, textarea, select { font: inherit; }
 
+    .ic {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex: 0 0 auto;
+      pointer-events: none;
+    }
+
     button {
-      display: inline-grid;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
       min-width: 40px;
       min-height: 40px;
-      place-items: center;
       border: 1px solid var(--line);
       border-radius: 10px;
       background: var(--panel-2);
@@ -54,14 +72,14 @@
     }
 
     button:disabled { cursor: not-allowed; opacity: .5; }
-    button:active { border-color: #425263; }
+    button:active { border-color: var(--accent); }
 
     input, textarea, select {
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 10px;
       outline: none;
-      background: #0b0f13;
+      background: #ffffff;
       color: var(--text);
       padding: 10px 12px;
     }
@@ -70,9 +88,12 @@
 
     .app {
       height: 100dvh;
+      width: 100vw;
+      overflow: hidden;
       display: grid;
+      grid-template-columns: minmax(0, 1fr);
       grid-template-rows: 52px minmax(0, 1fr) auto auto auto;
-      background: var(--terminal);
+      background: var(--bg);
     }
 
     /* ---- Topbar ---- */
@@ -83,6 +104,7 @@
       padding: 7px 8px;
       border-bottom: 1px solid var(--line);
       background: var(--panel);
+      box-shadow: 0 1px 6px rgba(47, 107, 255, .06);
     }
 
     .machine-btn {
@@ -97,10 +119,11 @@
     }
 
     .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--danger); flex: 0 0 auto; }
-    .dot.on { background: var(--accent); }
+    .dot.on { background: var(--ok); }
 
     #sessionSelect {
       flex: 1;
+      width: auto;
       min-width: 0;
       min-height: 38px;
       padding: 0 8px;
@@ -126,7 +149,7 @@
       padding: 20px;
       font-size: 14px;
       line-height: 1.7;
-      background: var(--terminal);
+      background: var(--bg);
       z-index: 5;
     }
 
@@ -144,10 +167,10 @@
     }
 
     .msg { max-width: 92%; border-radius: 12px; padding: 9px 12px; font-size: 14px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
-    .msg.user { align-self: flex-end; background: #143a26; border: 1px solid #1e5c3a; }
+    .msg.user { align-self: flex-end; background: linear-gradient(135deg, #e8eeff, #f1e9ff); border: 1px solid #c9d4ff; }
     .msg.ai { align-self: flex-start; background: var(--panel-2); border: 1px solid var(--line); }
     .msg.ai pre, .card pre {
-      background: #0b0f13;
+      background: #f4f6fd;
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 8px;
@@ -155,7 +178,7 @@
       font-size: 12px;
       margin: 6px 0;
     }
-    .msg.ai code { background: #0b0f13; border-radius: 4px; padding: 1px 5px; font-size: 12.5px; }
+    .msg.ai code { background: #eef1fa; color: var(--purple); border-radius: 4px; padding: 1px 5px; font-size: 12.5px; }
 
     .card {
       align-self: stretch;
@@ -171,18 +194,18 @@
     .card details { margin-top: 6px; }
     .card summary { color: var(--blue); font-size: 12px; cursor: pointer; }
 
-    .card.permission { border-color: var(--warn); background: #1d1809; }
+    .card.permission { border-color: #c4b5fd; background: #f6f2ff; box-shadow: 0 2px 10px rgba(124, 58, 237, .10); }
     .card.permission .actions { display: flex; gap: 8px; margin-top: 10px; }
     .card.permission .actions button { flex: 1; min-height: 40px; font-size: 13px; }
-    .btn-allow { background: #123c22 !important; border-color: var(--accent) !important; color: var(--accent) !important; }
-    .btn-deny { background: #3c1512 !important; border-color: var(--danger) !important; color: var(--danger) !important; }
+    .btn-allow { background: #e7f7ed !important; border-color: var(--ok) !important; color: var(--ok) !important; }
+    .btn-deny { background: #fdecea !important; border-color: var(--danger) !important; color: var(--danger) !important; }
     .badge { display: inline-block; border-radius: 6px; padding: 2px 8px; font-size: 11.5px; border: 1px solid var(--line); color: var(--muted); }
-    .badge.ok { color: var(--accent); border-color: var(--accent); }
+    .badge.ok { color: var(--ok); border-color: var(--ok); }
     .badge.no { color: var(--danger); border-color: var(--danger); }
 
     .diff { font-family: Menlo, Consolas, monospace; font-size: 12px; border-radius: 8px; overflow: hidden; margin-top: 6px; }
-    .diff .old { background: #3a1512; color: #ffb3ad; padding: 6px 8px; white-space: pre-wrap; word-break: break-all; border-bottom: 1px solid var(--line); }
-    .diff .new { background: #0f2f1c; color: #a9edc4; padding: 6px 8px; white-space: pre-wrap; word-break: break-all; }
+    .diff .old { background: #fdecea; color: #b42318; padding: 6px 8px; white-space: pre-wrap; word-break: break-all; border-bottom: 1px solid var(--line); }
+    .diff .new { background: #e7f7ed; color: #137a44; padding: 6px 8px; white-space: pre-wrap; word-break: break-all; }
 
     .divider { align-self: center; color: var(--muted); font-size: 12px; padding: 3px 0; }
     .divider.err { color: var(--danger); }
@@ -212,7 +235,7 @@
       border-radius: 999px;
       color: var(--muted);
     }
-    #chatbar .pill.on { color: var(--accent); border-color: var(--accent); }
+    #chatbar .pill.on { color: #fff; border-color: transparent; background: var(--grad); }
     #chatStatus { flex: 0 0 auto; font-size: 12px; color: var(--muted); padding: 0 4px; }
     #chatStatus.running { color: var(--warn); }
     #chatStatus.waiting { color: var(--danger); }
@@ -274,7 +297,7 @@
       line-height: 1.45;
     }
 
-    .composer .send { background: var(--accent); border-color: var(--accent); color: #06280f; font-weight: 600; }
+    .composer .send { background: var(--grad); border-color: transparent; color: #fff; font-weight: 600; }
     .composer .mic.recording { background: var(--danger); border-color: var(--danger); animation: pulse 1.2s infinite; }
     @keyframes pulse { 50% { opacity: .6; } }
 
@@ -283,7 +306,7 @@
       position: fixed;
       inset: 0;
       display: none;
-      background: rgba(0,0,0,.55);
+      background: rgba(29, 36, 51, .35);
       z-index: 40;
     }
     .overlay.open { display: block; }
@@ -298,12 +321,13 @@
       flex-direction: column;
       background: var(--panel);
       border-left: 1px solid var(--line);
+      box-shadow: -6px 0 24px rgba(29, 36, 51, .12);
       padding: 12px;
       overflow-y: auto;
       gap: 10px;
     }
 
-    .sheet h3 { margin: 2px 0 4px; font-size: 15px; letter-spacing: .06em; }
+    .sheet h3 { margin: 2px 0 4px; font-size: 15px; letter-spacing: .06em; color: var(--purple); }
     .sheet h4 { margin: 8px 0 2px; font-size: 12.5px; letter-spacing: .08em; color: var(--muted); }
     .sheet .muted { color: var(--muted); font-size: 12.5px; line-height: 1.5; }
 
@@ -336,7 +360,7 @@
     .hr { border-top: 1px solid var(--line); margin: 4px 0; }
 
     #gitOutput {
-      background: #0b0f13;
+      background: #f4f6fd;
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 8px;
@@ -355,8 +379,9 @@
       bottom: 90px;
       transform: translateX(-50%);
       max-width: 88vw;
-      background: var(--panel-2);
-      border: 1px solid var(--line);
+      background: #1d2433;
+      color: #fff;
+      border: 1px solid #1d2433;
       border-radius: 10px;
       padding: 10px 14px;
       font-size: 13px;
@@ -367,6 +392,34 @@
   </style>
 </head>
 <body>
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+    <symbol id="i-power" viewBox="0 0 24 24"><path d="M18.36 6.64a9 9 0 1 1-12.72 0"/><line x1="12" y1="2" x2="12" y2="12"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8A8.5 8.5 0 0 1 12.5 3a8.5 8.5 0 0 1 8.5 8.5z"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M17 3a2.83 2.83 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+    <symbol id="i-tool" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+    <symbol id="i-repeat" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
+    <symbol id="i-enter" viewBox="0 0 24 24"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></symbol>
+    <symbol id="i-backspace" viewBox="0 0 24 24"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/></symbol>
+    <symbol id="i-tabback" viewBox="0 0 24 24"><line x1="3" y1="4" x2="3" y2="20"/><polyline points="13 6 7 12 13 18"/><line x1="7" y1="12" x2="21" y2="12"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></symbol>
+    <symbol id="i-right" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></symbol>
+    <symbol id="i-result" viewBox="0 0 24 24"><polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></symbol>
+  </svg>
   <div class="app">
     <div class="topbar">
       <button class="machine-btn" id="machineBtn">
@@ -374,8 +427,8 @@
         <span id="machineName">+ Mesin</span>
       </button>
       <select id="sessionSelect"></select>
-      <button class="icon-btn danger" id="stopBtn" title="Stop sesi">⏻</button>
-      <button class="icon-btn" id="projectsBtn" title="Projects">☰</button>
+      <button class="icon-btn danger" id="stopBtn" title="Stop sesi"><svg class="ic" style="width:19px;height:19px"><use href="#i-power"/></svg></button>
+      <button class="icon-btn" id="projectsBtn" title="Projects"><svg class="ic" style="width:19px;height:19px"><use href="#i-menu"/></svg></button>
     </div>
 
     <div id="mainArea" style="display:contents">
@@ -384,7 +437,7 @@
         <div id="emptyState">
           <div>
             <b>JARVIS</b><br>
-            Pilih mesin (kiri atas), lalu buka ☰ untuk<br>memilih project &amp; mulai sesi Chat / Terminal.
+            Pilih mesin (kiri atas), lalu buka menu<br>di kanan atas untuk memilih project<br>&amp; mulai sesi Chat / Terminal.
           </div>
         </div>
         <div id="chatwrap"></div>
@@ -393,7 +446,7 @@
 
     <div id="chatbar">
       <span id="chatStatus">—</span>
-      <button class="pill" id="interruptBtn">■ Stop task</button>
+      <button class="pill" id="interruptBtn"><svg class="ic" style="width:13px;height:13px"><use href="#i-stop"/></svg> Stop task</button>
       <span style="color:var(--muted);font-size:11px;flex:0 0 auto">Auto-izin:</span>
       <button class="pill" data-flag="readonly">baca</button>
       <button class="pill" data-flag="edits">edit file</button>
@@ -404,26 +457,26 @@
     <div class="quickkeys" id="quickkeys">
       <button data-key="esc">Esc</button>
       <button data-key="tab">Tab</button>
-      <button data-key="shift_tab">⇤Tab</button>
-      <button data-key="up">↑</button>
-      <button data-key="down">↓</button>
-      <button data-key="left">←</button>
-      <button data-key="right">→</button>
-      <button data-key="enter">⏎</button>
+      <button data-key="shift_tab"><svg class="ic"><use href="#i-tabback"/></svg>Tab</button>
+      <button data-key="up"><svg class="ic"><use href="#i-up"/></svg></button>
+      <button data-key="down"><svg class="ic"><use href="#i-down"/></svg></button>
+      <button data-key="left"><svg class="ic"><use href="#i-left"/></svg></button>
+      <button data-key="right"><svg class="ic"><use href="#i-right"/></svg></button>
+      <button data-key="enter"><svg class="ic"><use href="#i-enter"/></svg></button>
       <button data-key="ctrl_c">^C</button>
       <button data-lit="y">y</button>
       <button data-lit="n">n</button>
       <button data-lit="1">1</button>
       <button data-lit="2">2</button>
       <button data-lit="3">3</button>
-      <button data-key="backspace">⌫</button>
+      <button data-key="backspace"><svg class="ic"><use href="#i-backspace"/></svg></button>
     </div>
 
     <div>
       <div id="templates"></div>
       <div class="composer">
         <textarea id="promptInput" rows="1" placeholder="Ketik prompt…"></textarea>
-        <button class="mic icon-btn" id="micBtn" title="Rekam suara">🎙</button>
+        <button class="mic icon-btn" id="micBtn" title="Rekam suara"><svg class="ic" style="width:19px;height:19px"><use href="#i-mic"/></svg></button>
         <button class="send" id="sendBtn">Kirim</button>
       </div>
     </div>
@@ -434,7 +487,7 @@
     <div class="sheet">
       <h3>PROJECT — <span id="drawerMachine"></span></h3>
       <div class="seg" id="engineSeg">
-        <button data-engine="chat" class="active">💬 Chat</button>
+        <button data-engine="chat" class="active"><svg class="ic" style="width:15px;height:15px"><use href="#i-chat"/></svg> Chat</button>
         <button data-engine="claude">Claude CLI</button>
         <button data-engine="codex">Codex</button>
         <button data-engine="shell">Shell</button>
@@ -442,14 +495,14 @@
       <div class="muted">Tap project untuk mulai sesi dengan mode di atas. <b>Chat</b> = Claude Code dengan kartu izin & riwayat (direkomendasikan).</div>
       <div class="row">
         <input id="customPath" placeholder="Path custom, mis. /home/user/proyek">
-        <button id="addPathBtn">＋</button>
+        <button id="addPathBtn"><svg class="ic"><use href="#i-plus"/></svg></button>
       </div>
       <div class="row">
         <input id="mkdirPath" placeholder='mkdir "/path/folder-baru"'>
         <button id="mkdirBtn">Run</button>
       </div>
       <div class="row">
-        <button id="refreshProjects" class="grow">↻ Refresh daftar</button>
+        <button id="refreshProjects" class="grow"><svg class="ic" style="width:14px;height:14px"><use href="#i-refresh"/></svg> Refresh daftar</button>
       </div>
       <div class="list" id="projectList"></div>
 
@@ -480,6 +533,10 @@
       <h3>MESIN</h3>
       <div class="muted">Tambahkan agent Jarvis di tiap mesin. URL = alamat Tailscale, mis. <i>http://100.x.y.z:8300</i>. Token = JARVIS_AUTH_TOKEN di backend/.env mesin itu.</div>
       <div class="list" id="machineList"></div>
+      <div class="row">
+        <button id="pushBtn" class="grow"><svg class="ic"><use href="#i-bell"/></svg> Aktifkan notifikasi HP</button>
+      </div>
+      <div class="muted" id="pushHint"></div>
       <div class="hr"></div>
       <input id="mName" placeholder="Nama (mis. PC-Ubuntu)">
       <input id="mUrl" placeholder="http://100.x.y.z:8300">
@@ -520,6 +577,8 @@
     const permissionCards = {};   // request_id -> element
 
     const $ = id => document.getElementById(id);
+    const ic = (name, size = 14) =>
+      `<svg class="ic" style="width:${size}px;height:${size}px"><use href="#i-${name}"/></svg>`;
 
     // ================= Terminal =================
     const term = new Terminal({
@@ -631,16 +690,16 @@
         const div = document.createElement('div');
         div.className = 'item' + (machine && machine.id === m.id ? ' active' : '');
         div.innerHTML = `<div class="grow"><div class="name"></div><div class="sub"></div></div>
-                         <span class="tag edit">✎</span><span class="tag del">🗑</span>`;
+                         <span class="tag edit">${ic('edit', 12)}</span><span class="tag del">${ic('trash', 12)}</span>`;
         div.querySelector('.name').textContent = m.name;
         div.querySelector('.sub').textContent = m.url;
         div.addEventListener('click', async (ev) => {
-          if (ev.target.classList.contains('edit')) {
+          if (ev.target.closest('.edit')) {
             editingMachineId = m.id;
             $('mName').value = m.name; $('mUrl').value = m.url; $('mToken').value = m.token;
             return;
           }
-          if (ev.target.classList.contains('del')) {
+          if (ev.target.closest('.del')) {
             if (!confirm('Hapus mesin ' + m.name + '?')) return;
             store.machines = store.machines.filter(x => x.id !== m.id);
             if (machine && machine.id === m.id) await selectMachine('');
@@ -657,6 +716,7 @@
 
     $('machineBtn').addEventListener('click', () => {
       renderMachineList();
+      updatePushHint();
       $('machineOverlay').classList.add('open');
     });
 
@@ -691,10 +751,10 @@
       sel.innerHTML = '';
       const options = [];
       for (const c of chatSessions.filter(c => c.status !== 'closed')) {
-        options.push({ value: 'c:' + c.id, label: `💬 ${c.project}` });
+        options.push({ value: 'c:' + c.id, label: `Chat · ${c.project}` });
       }
       for (const s of termSessions.filter(s => s.status === 'running')) {
-        options.push({ value: 't:' + s.id, label: `⌨ ${s.engine} · ${s.project}` });
+        options.push({ value: 't:' + s.id, label: `${s.engine} · ${s.project}` });
       }
       if (!options.length) options.push({ value: '', label: '— tidak ada sesi —' });
       for (const o of options) {
@@ -798,15 +858,15 @@
     function setChatStatus(status) {
       const el = $('chatStatus');
       const map = {
-        idle: ['✓ siap', ''],
-        running: ['⏳ bekerja…', 'running'],
-        waiting_permission: ['🔐 butuh izin', 'waiting'],
+        idle: [ic('check', 12) + ' siap', ''],
+        running: [ic('clock', 12) + ' bekerja…', 'running'],
+        waiting_permission: [ic('lock', 12) + ' butuh izin', 'waiting'],
         starting: ['memulai…', 'running'],
-        error: ['⚠ error', 'waiting'],
+        error: [ic('alert', 12) + ' error', 'waiting'],
         closed: ['ditutup', ''],
       };
-      const [label, cls] = map[status] || [status, ''];
-      el.textContent = label;
+      const [label, cls] = map[status] || [esc(status), ''];
+      el.innerHTML = label;
       el.className = cls;
       $('interruptBtn').disabled = !(status === 'running' || status === 'waiting_permission');
     }
@@ -865,7 +925,7 @@
         case 'thinking': {
           const det = document.createElement('details');
           det.className = 'thinking';
-          det.innerHTML = `<summary>🧠 thinking…</summary><div class="body"></div>`;
+          det.innerHTML = `<summary>${ic('zap', 12)} thinking…</summary><div class="body"></div>`;
           det.querySelector('.body').textContent = ev.text;
           chatAppend(det);
           break;
@@ -874,7 +934,7 @@
           const div = document.createElement('div');
           div.className = 'card';
           const summary = toolSummary(ev.name, ev.input);
-          div.innerHTML = `<div class="head">🔧 <b>${esc(ev.name)}</b></div>` +
+          div.innerHTML = `<div class="head">${ic('tool', 14)} <b>${esc(ev.name)}</b></div>` +
             (summary ? `<div class="sub">${esc(summary.slice(0, 300))}</div>` : '') +
             ((ev.name === 'Edit' || ev.name === 'Write') ? diffHtml(ev.input) : '') +
             `<details><summary>detail input</summary><pre>${esc(JSON.stringify(ev.input, null, 2).slice(0, 4000))}</pre></details>`;
@@ -887,7 +947,7 @@
           det.className = 'card';
           det.style.padding = '6px 11px';
           det.innerHTML = `<summary style="color:${ev.is_error ? 'var(--danger)' : 'var(--muted)'};font-size:12px;cursor:pointer">` +
-            `${ev.is_error ? '✖ hasil (error)' : '↳ hasil'}</summary><pre></pre>`;
+            `${ev.is_error ? ic('x', 11) + ' hasil (error)' : ic('result', 11) + ' hasil'}</summary><pre></pre>`;
           det.querySelector('pre').textContent = ev.content.slice(0, 6000);
           chatAppend(det);
           break;
@@ -896,14 +956,14 @@
           const div = document.createElement('div');
           div.className = 'card permission';
           const summary = toolSummary(ev.tool, ev.input);
-          div.innerHTML = `<div class="head">🔐 <b>Izinkan ${esc(ev.tool)}?</b></div>` +
+          div.innerHTML = `<div class="head">${ic('lock', 14)} <b>Izinkan ${esc(ev.tool)}?</b></div>` +
             (summary ? `<div class="sub">${esc(summary.slice(0, 400))}</div>` : '') +
             ((ev.tool === 'Edit' || ev.tool === 'Write') ? diffHtml(ev.input) : '') +
             `<details><summary>detail</summary><pre>${esc(JSON.stringify(ev.input, null, 2).slice(0, 4000))}</pre></details>` +
             `<div class="actions">
-               <button class="btn-allow" data-d="allow">✅ Izinkan</button>
-               <button class="btn-deny" data-d="deny">❌ Tolak</button>
-               <button data-d="allow_always">♾ Selalu</button>
+               <button class="btn-allow" data-d="allow">${ic('check', 14)} Izinkan</button>
+               <button class="btn-deny" data-d="deny">${ic('x', 14)} Tolak</button>
+               <button data-d="allow_always">${ic('repeat', 13)} Selalu</button>
              </div>`;
           div.querySelectorAll('.actions button').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -922,7 +982,9 @@
             if (actions) {
               const ok = ev.decision !== 'deny';
               actions.innerHTML = `<span class="badge ${ok ? 'ok' : 'no'}">` +
-                (ev.decision === 'allow' ? '✅ Diizinkan' : ev.decision === 'allow_always' ? '♾ Selalu diizinkan' : '❌ Ditolak') + '</span>';
+                (ev.decision === 'allow' ? ic('check', 11) + ' Diizinkan'
+                 : ev.decision === 'allow_always' ? ic('repeat', 11) + ' Selalu diizinkan'
+                 : ic('x', 11) + ' Ditolak') + '</span>';
             }
           }
           break;
@@ -932,7 +994,7 @@
           div.className = 'divider' + (ev.is_error ? ' err' : '');
           const secs = ((ev.duration_ms || 0) / 1000).toFixed(0);
           const cost = ev.cost_usd ? ` · $${ev.cost_usd.toFixed(3)}` : '';
-          div.textContent = ev.is_error ? `⚠ ${ev.subtype}` : `— selesai · ${secs}s${cost} —`;
+          div.innerHTML = ev.is_error ? `${ic('alert', 11)} ${esc(ev.subtype)}` : esc(`— selesai · ${secs}s${cost} —`);
           chatAppend(div);
           break;
         }
@@ -946,7 +1008,7 @@
           const div = document.createElement('div');
           div.className = 'card';
           div.style.borderColor = 'var(--danger)';
-          div.innerHTML = `<div class="head">⚠ <b>Error</b></div><div class="sub"></div>`;
+          div.innerHTML = `<div class="head">${ic('alert', 14)} <b>Error</b></div><div class="sub"></div>`;
           div.querySelector('.sub').textContent = ev.message;
           chatAppend(div);
           break;
@@ -1076,11 +1138,11 @@
         for (const c of items) {
           const div = document.createElement('div');
           div.className = 'item';
-          div.innerHTML = `<div class="grow"><div class="name"></div><div class="sub"></div></div><span class="tag del">🗑</span>`;
-          div.querySelector('.name').textContent = `💬 ${c.project}`;
+          div.innerHTML = `<div class="grow"><div class="name"></div><div class="sub"></div></div><span class="tag del">${ic('trash', 12)}</span>`;
+          div.querySelector('.name').textContent = c.project;
           div.querySelector('.sub').textContent = c.last_prompt || c.project_path;
           div.addEventListener('click', async (ev) => {
-            if (ev.target.classList.contains('del')) {
+            if (ev.target.closest('.del')) {
               if (!confirm('Hapus riwayat chat ini?')) return;
               try {
                 await api(`/api/chat/${c.id}?delete_history=true`, { method: 'DELETE' });
@@ -1194,7 +1256,7 @@
         wrap.appendChild(btn);
       }
       const add = document.createElement('button');
-      add.textContent = '＋ simpan';
+      add.innerHTML = ic('plus', 11) + ' simpan';
       add.addEventListener('click', () => {
         const text = $('promptInput').value.trim();
         if (!text) { toast('Ketik dulu teks yang mau disimpan jadi template'); return; }
@@ -1248,13 +1310,69 @@
             const data = await api('/api/transcribe', { method: 'POST', body: form });
             promptInput.value = (promptInput.value ? promptInput.value + ' ' : '') + (data.text || '');
             promptInput.dispatchEvent(new Event('input'));
-            toast('✔ ' + (data.text || '(kosong)'));
+            toast('Transkrip: ' + (data.text || '(kosong)'));
           } catch (e) { toast('Transkripsi gagal: ' + e.message); }
         };
         recorder.start();
         $('micBtn').classList.add('recording');
       } catch (e) { toast('Mic gagal: ' + e.message); }
     });
+
+    // ================= Web Push =================
+    function pushSupported() {
+      return window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window;
+    }
+
+    function urlB64ToUint8Array(base64) {
+      const padding = '='.repeat((4 - base64.length % 4) % 4);
+      const raw = atob((base64 + padding).replace(/-/g, '+').replace(/_/g, '/'));
+      return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+    }
+
+    async function subscribePush(silent = false) {
+      if (!machine) { if (!silent) toast('Pilih mesin dulu'); return; }
+      if (!pushSupported()) {
+        if (!silent) toast('Notifikasi butuh HTTPS.\nBuka app lewat alamat https://…ts.net (tailscale serve), bukan http://IP.');
+        return;
+      }
+      // Push hanya bisa ke origin tempat app dibuka — pastikan mesin aktif = origin ini
+      if (baseUrl() !== location.origin) {
+        if (!silent) toast('Notifikasi diaktifkan per mesin: buka app lewat alamat mesin ini (' + location.origin + ' ≠ ' + baseUrl() + ')');
+        return;
+      }
+      try {
+        const perm = await Notification.requestPermission();
+        if (perm !== 'granted') { if (!silent) toast('Izin notifikasi ditolak browser'); return; }
+        const reg = await navigator.serviceWorker.ready;
+        const { key } = await api('/api/push/key');
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) {
+          sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlB64ToUint8Array(key),
+          });
+        }
+        await apiJson('/api/push/subscribe', { subscription: sub.toJSON() });
+        if (!silent) {
+          await apiJson('/api/push/test', {});
+          toast('Notifikasi aktif! Cek notifikasi tes yang barusan masuk.');
+        }
+        updatePushHint();
+      } catch (e) { if (!silent) toast('Gagal mengaktifkan notifikasi: ' + e.message); }
+    }
+
+    function updatePushHint() {
+      const hint = $('pushHint');
+      if (!pushSupported()) {
+        hint.textContent = 'Notifikasi HP butuh HTTPS — buka app lewat https://…ts.net (tailscale serve). Telegram tetap jalan tanpa ini.';
+      } else if (Notification.permission === 'granted') {
+        hint.textContent = 'Notifikasi aktif untuk mesin ini. Notifikasi izin punya tombol Izinkan/Tolak langsung.';
+      } else {
+        hint.textContent = 'Aktifkan agar dapat notifikasi saat AI butuh izin, walau app tertutup. Telegram tetap jalan sebagai cadangan.';
+      }
+    }
+
+    $('pushBtn').addEventListener('click', () => subscribePush(false));
 
     // ================= Init =================
     if ('serviceWorker' in navigator) {
@@ -1271,6 +1389,8 @@
         return;
       }
       await selectMachine(store.activeMachine || machines[0].id);
+      // refresh subscription push diam-diam kalau izin sudah pernah diberikan
+      if (pushSupported() && Notification.permission === 'granted') subscribePush(true);
       setInterval(() => { if (machine && !document.hidden) refreshStatus(); }, 20000);
     })();
   </script>

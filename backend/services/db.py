@@ -34,6 +34,11 @@ def _connection() -> sqlite3.Connection:
                 data TEXT NOT NULL,
                 PRIMARY KEY (session_id, seq)
             );
+            CREATE TABLE IF NOT EXISTS push_subscriptions (
+                endpoint TEXT PRIMARY KEY,
+                data TEXT NOT NULL,
+                created_at REAL NOT NULL
+            );
             """
         )
         _conn.commit()
@@ -104,6 +109,29 @@ def delete_chat_session(session_id: str):
         conn.execute("DELETE FROM chat_sessions WHERE id = ?", (session_id,))
         conn.execute("DELETE FROM chat_events WHERE session_id = ?", (session_id,))
         conn.commit()
+
+
+def save_push_subscription(subscription: dict):
+    with _lock:
+        conn = _connection()
+        conn.execute(
+            "INSERT OR REPLACE INTO push_subscriptions (endpoint, data, created_at) VALUES (?, ?, ?)",
+            (subscription.get("endpoint", ""), json.dumps(subscription), time.time()),
+        )
+        conn.commit()
+
+
+def delete_push_subscription(endpoint: str):
+    with _lock:
+        conn = _connection()
+        conn.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (endpoint,))
+        conn.commit()
+
+
+def list_push_subscriptions() -> list[dict]:
+    with _lock:
+        rows = _connection().execute("SELECT data FROM push_subscriptions").fetchall()
+    return [json.loads(row[0]) for row in rows]
 
 
 def _row_to_dict(row) -> dict:

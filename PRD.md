@@ -1,9 +1,19 @@
 # PRD — Jarvis: Remote AI Coding Control dari HP
 
-**Versi:** 0.4
+**Versi:** 0.5
 **Tanggal:** 16 Juli 2026
-**Status:** Fase 0, 1, 2 SELESAI + sebagian besar Fase 3 (teruji end-to-end di
-PC Ubuntu). Sisa: setup laptop Windows + uji coba nyata oleh user.
+**Status:** Fase 0–3 SELESAI + **Web Push (PWA)** sebagai kanal notifikasi
+utama, Telegram tetap aktif sebagai cadangan (dual-channel). Sisa: user
+mengaktifkan HTTPS (`sudo tailscale serve`), setup laptop Windows, uji nyata.
+
+> **Notifikasi dual-channel:** setiap event (butuh izin / task selesai / error)
+> dikirim ke Telegram **dan** Web Push sekaligus. Web Push punya tombol
+> ✅ Izinkan / ❌ Tolak langsung di notifikasi (divalidasi nonce HMAC per
+> request, tanpa menyimpan token di service worker). Web Push butuh app
+> diakses via HTTPS → `sudo tailscale serve --bg http://localhost:8300`
+> memberi `https://<host>.<tailnet>.ts.net`. Kunci VAPID dibuat otomatis
+> (`backend/vapid_private.pem`); subscription per-browser di `jarvis.db`.
+> Telegram bisa dimatikan kapan saja dengan mengosongkan `TELEGRAM_BOT_TOKEN`.
 
 > **Catatan penting (ditemukan saat implementasi):** satu bot Telegram hanya
 > boleh dipakai SATU agent, karena `getUpdates` long-polling konflik (409) jika
