@@ -1,7 +1,7 @@
 // Service worker minimal: cache shell agar app tetap terbuka saat jaringan lambat.
 // Semua request API/WS tetap langsung ke network.
-const CACHE = 'jarvis-shell-v2';
-const SHELL = ['/', '/manifest.json', '/icon.svg'];
+const CACHE = 'jarvis-shell-v4';
+const SHELL = ['/', '/manifest.json?v=2', '/icon-192.png?v=2', '/icon-512.png?v=2'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));
@@ -24,8 +24,8 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title || 'Jarvis', {
       body: data.body || '',
-      icon: '/icon.svg',
-      badge: '/icon.svg',
+      icon: '/icon-192.png?v=2',
+      badge: '/icon-192.png?v=2',
       tag: data.tag || undefined,
       renotify: true,
       vibrate: [120, 60, 120],

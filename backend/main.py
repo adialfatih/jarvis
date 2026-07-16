@@ -279,19 +279,33 @@ async def index():
     return FileResponse(FRONTEND_FILE)
 
 
+NO_CACHE = {"Cache-Control": "no-cache, must-revalidate"}
+
+
 @app.get("/manifest.json")
 async def manifest():
-    return FileResponse(FRONTEND_FILE.parent / "manifest.json", media_type="application/manifest+json")
+    return FileResponse(FRONTEND_FILE.parent / "manifest.json",
+                        media_type="application/manifest+json", headers=NO_CACHE)
 
 
 @app.get("/sw.js")
 async def service_worker():
-    return FileResponse(FRONTEND_FILE.parent / "sw.js", media_type="text/javascript")
+    return FileResponse(FRONTEND_FILE.parent / "sw.js", media_type="text/javascript", headers=NO_CACHE)
 
 
 @app.get("/icon.svg")
 async def icon():
     return FileResponse(FRONTEND_FILE.parent / "icon.svg", media_type="image/svg+xml")
+
+
+@app.get("/icon-192.png")
+async def icon_192():
+    return FileResponse(FRONTEND_FILE.parent / "icon-192.png", media_type="image/png", headers=NO_CACHE)
+
+
+@app.get("/icon-512.png")
+async def icon_512():
+    return FileResponse(FRONTEND_FILE.parent / "icon-512.png", media_type="image/png", headers=NO_CACHE)
 
 
 # ---------- API ----------

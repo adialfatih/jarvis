@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#ffffff">
   <title>Jarvis Remote</title>
-  <link rel="manifest" href="/manifest.json">
-  <link rel="icon" href="/icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="/icon.svg">
+  <link rel="manifest" href="/manifest.json?v=2">
+  <link rel="icon" href="/icon-192.png?v=2" type="image/png">
+  <link rel="apple-touch-icon" href="/icon-192.png?v=2">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
   <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
@@ -121,16 +121,6 @@
     .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--danger); flex: 0 0 auto; }
     .dot.on { background: var(--ok); }
 
-    #sessionSelect {
-      flex: 1;
-      width: auto;
-      min-width: 0;
-      min-height: 38px;
-      padding: 0 8px;
-      background: var(--panel-2);
-      border-radius: 10px;
-    }
-
     .icon-btn { min-width: 38px; min-height: 38px; padding: 0; background: transparent; font-size: 17px; }
     .icon-btn.danger { color: var(--danger); }
 
@@ -147,11 +137,89 @@
       text-align: center;
       color: var(--muted);
       padding: 20px;
-      font-size: 14px;
-      line-height: 1.7;
       background: var(--bg);
       z-index: 5;
     }
+
+    .empty-icon {
+      width: 78px;
+      height: 78px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #e8eeff, #f1e9ff);
+      border: 1px solid #dce4ff;
+      display: grid;
+      place-items: center;
+      margin: 0 auto 16px;
+      color: var(--accent);
+    }
+    .empty-icon .ic { width: 34px; height: 34px; stroke-width: 1.6; }
+    .empty-title { font-weight: 600; font-size: 15px; color: var(--text); margin-bottom: 6px; }
+    .empty-sub { font-size: 13px; line-height: 1.6; margin-bottom: 18px; }
+    #emptyStartBtn { margin: 0 auto; background: var(--grad); border: none; color: #fff; font-weight: 600; padding: 0 18px; }
+
+    /* ---- Confirm dialog ---- */
+    #confirmOverlay { z-index: 70; }
+    .confirm-box {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: min(86vw, 340px);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 18px 16px 14px;
+      box-shadow: 0 12px 40px rgba(29, 36, 51, .18);
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(.93);
+      transition: transform .22s cubic-bezier(.2, .8, .25, 1), opacity .18s ease;
+    }
+    .overlay.open .confirm-box {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    /* ---- Session chooser ---- */
+    .session-btn {
+      flex: 1;
+      min-width: 0;
+      min-height: 38px;
+      justify-content: space-between;
+      padding: 0 10px;
+      background: var(--panel-2);
+    }
+    #sessionLabel {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      overflow: hidden;
+      white-space: nowrap;
+      font-size: 13.5px;
+      text-align: left;
+    }
+    .popup {
+      position: absolute;
+      top: 58px;
+      left: 8px;
+      right: 8px;
+      max-height: 62vh;
+      overflow-y: auto;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      box-shadow: 0 14px 40px rgba(29, 36, 51, .16);
+      opacity: 0;
+      transform: translateY(-10px);
+      transition: transform .25s cubic-bezier(.2, .8, .25, 1), opacity .2s ease;
+    }
+    .overlay.open .popup { opacity: 1; transform: none; }
+    .popup-title { font-size: 12px; color: var(--muted); letter-spacing: .08em; margin-bottom: 8px; }
+    #confirmText { font-size: 14px; line-height: 1.6; margin-bottom: 16px; white-space: pre-wrap; color: var(--text); }
+    .confirm-box .row button { flex: 1; min-height: 42px; }
+    #confirmOk { background: var(--grad); border: none; color: #fff; font-weight: 600; }
 
     /* ---- Chat ---- */
     #chatwrap {
@@ -305,11 +373,19 @@
     .overlay {
       position: fixed;
       inset: 0;
-      display: none;
       background: rgba(29, 36, 51, .35);
       z-index: 40;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity .22s ease, visibility 0s linear .25s;
     }
-    .overlay.open { display: block; }
+    .overlay.open {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transition: opacity .22s ease;
+    }
 
     .sheet {
       position: absolute;
@@ -322,10 +398,14 @@
       background: var(--panel);
       border-left: 1px solid var(--line);
       box-shadow: -6px 0 24px rgba(29, 36, 51, .12);
+      transform: translateX(105%);
+      transition: transform .3s cubic-bezier(.2, .8, .25, 1);
       padding: 12px;
       overflow-y: auto;
       gap: 10px;
     }
+
+    .overlay.open .sheet { transform: none; }
 
     .sheet h3 { margin: 2px 0 4px; font-size: 15px; letter-spacing: .06em; color: var(--purple); }
     .sheet h4 { margin: 8px 0 2px; font-size: 12.5px; letter-spacing: .08em; color: var(--muted); }
@@ -397,6 +477,7 @@
     <symbol id="i-menu" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></symbol>
     <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/></symbol>
     <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8A8.5 8.5 0 0 1 12.5 3a8.5 8.5 0 0 1 8.5 8.5z"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
     <symbol id="i-refresh" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></symbol>
     <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></symbol>
@@ -426,7 +507,10 @@
         <span class="dot" id="machineDot"></span>
         <span id="machineName">+ Mesin</span>
       </button>
-      <select id="sessionSelect"></select>
+      <button class="session-btn" id="sessionBtn">
+        <span id="sessionLabel"></span>
+        <svg class="ic" style="width:13px;height:13px"><use href="#i-down"/></svg>
+      </button>
       <button class="icon-btn danger" id="stopBtn" title="Stop sesi"><svg class="ic" style="width:19px;height:19px"><use href="#i-power"/></svg></button>
       <button class="icon-btn" id="projectsBtn" title="Projects"><svg class="ic" style="width:19px;height:19px"><use href="#i-menu"/></svg></button>
     </div>
@@ -436,8 +520,10 @@
         <div id="terminal"></div>
         <div id="emptyState">
           <div>
-            <b>JARVIS</b><br>
-            Pilih mesin (kiri atas), lalu buka menu<br>di kanan atas untuk memilih project<br>&amp; mulai sesi Chat / Terminal.
+            <div class="empty-icon"><svg class="ic"><use href="#i-chat"/></svg></div>
+            <div class="empty-title">Belum ada session aktif untuk sekarang</div>
+            <div class="empty-sub">Pilih project lalu mulai sesi Chat atau Terminal<br>lewat menu di kanan atas.</div>
+            <button id="emptyStartBtn"><svg class="ic"><use href="#i-menu"/></svg> Pilih project</button>
           </div>
         </div>
         <div id="chatwrap"></div>
@@ -548,6 +634,24 @@
     </div>
   </div>
 
+  <div class="overlay" id="sessionOverlay">
+    <div class="popup">
+      <div class="popup-title">SESI BERJALAN</div>
+      <div class="list" id="sessionList"></div>
+      <button id="sessionNewBtn" style="width:100%;margin-top:10px"><svg class="ic"><use href="#i-plus"/></svg> Sesi baru</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="confirmOverlay">
+    <div class="confirm-box">
+      <div id="confirmText"></div>
+      <div class="row">
+        <button id="confirmCancel">Batal</button>
+        <button id="confirmOk">Ya</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toast"></div>
 
   <script>
@@ -579,6 +683,30 @@
     const $ = id => document.getElementById(id);
     const ic = (name, size = 14) =>
       `<svg class="ic" style="width:${size}px;height:${size}px"><use href="#i-${name}"/></svg>`;
+
+    function ask(message, okLabel = 'Ya') {
+      return new Promise(resolve => {
+        $('confirmText').textContent = message;
+        $('confirmOk').textContent = okLabel;
+        $('confirmOverlay').classList.add('open');
+        const done = value => {
+          $('confirmOverlay').classList.remove('open');
+          $('confirmOk').onclick = $('confirmCancel').onclick = $('confirmOverlay').onclick = null;
+          resolve(value);
+        };
+        $('confirmOk').onclick = () => done(true);
+        $('confirmCancel').onclick = () => done(false);
+        $('confirmOverlay').onclick = e => { if (e.target === $('confirmOverlay')) done(false); };
+      });
+    }
+
+    function showEmpty(show) {
+      $('emptyState').style.display = show ? 'grid' : 'none';
+      if (show) {
+        $('chatbar').style.display = 'none';
+        $('quickkeys').style.display = 'none';
+      }
+    }
 
     // ================= Terminal =================
     const term = new Terminal({
@@ -700,7 +828,7 @@
             return;
           }
           if (ev.target.closest('.del')) {
-            if (!confirm('Hapus mesin ' + m.name + '?')) return;
+            if (!await ask('Hapus mesin ' + m.name + '?', 'Hapus')) return;
             store.machines = store.machines.filter(x => x.id !== m.id);
             if (machine && machine.id === m.id) await selectMachine('');
             renderMachineList();
@@ -746,28 +874,61 @@
     });
 
     // ================= Session select & attach =================
-    function renderSessionSelect() {
-      const sel = $('sessionSelect');
-      sel.innerHTML = '';
+    function sessionOptions() {
       const options = [];
       for (const c of chatSessions.filter(c => c.status !== 'closed')) {
-        options.push({ value: 'c:' + c.id, label: `Chat · ${c.project}` });
+        options.push({ value: 'c:' + c.id, label: c.project, kind: 'chat' });
       }
       for (const s of termSessions.filter(s => s.status === 'running')) {
-        options.push({ value: 't:' + s.id, label: `${s.engine} · ${s.project}` });
+        options.push({ value: 't:' + s.id, label: `${s.engine} · ${s.project}`, kind: 'term' });
       }
-      if (!options.length) options.push({ value: '', label: '— tidak ada sesi —' });
-      for (const o of options) {
-        const opt = document.createElement('option');
-        opt.value = o.value; opt.textContent = o.label;
-        sel.appendChild(opt);
-      }
-      const current = attached ? (attached.kind === 'chat' ? 'c:' : 't:') + attached.id : '';
-      sel.value = options.some(o => o.value === current) ? current : (options[0] ? options[0].value : '');
+      return options;
     }
 
-    $('sessionSelect').addEventListener('change', e => {
-      if (e.target.value) attachByValue(e.target.value);
+    function renderSessionSelect() {
+      const options = sessionOptions();
+      const current = attached ? (attached.kind === 'chat' ? 'c:' : 't:') + attached.id : '';
+      const active = options.find(o => o.value === current);
+      const label = $('sessionLabel');
+      if (active) {
+        label.innerHTML = ic(active.kind === 'chat' ? 'chat' : 'terminal', 13) +
+          `<span style="overflow:hidden;text-overflow:ellipsis">${esc(active.label)}</span>`;
+      } else {
+        label.innerHTML = `<span style="color:var(--muted)">— tidak ada sesi —</span>`;
+      }
+      renderSessionPopup(options, current);
+    }
+
+    function renderSessionPopup(options, current) {
+      const wrap = $('sessionList');
+      wrap.innerHTML = '';
+      if (!options.length) {
+        wrap.innerHTML = '<div class="muted">Belum ada sesi berjalan.</div>';
+        return;
+      }
+      for (const o of options) {
+        const div = document.createElement('div');
+        div.className = 'item' + (o.value === current ? ' active' : '');
+        div.innerHTML = `${ic(o.kind === 'chat' ? 'chat' : 'terminal', 15)}` +
+          `<div class="grow"><div class="name"></div></div>` +
+          (o.value === current ? '<span class="tag">aktif</span>' : '');
+        div.querySelector('.name').textContent = o.label;
+        div.addEventListener('click', () => {
+          $('sessionOverlay').classList.remove('open');
+          if (o.value !== current) attachByValue(o.value);
+        });
+        wrap.appendChild(div);
+      }
+    }
+
+    $('sessionBtn').addEventListener('click', () => {
+      renderSessionSelect();
+      $('sessionOverlay').classList.add('open');
+    });
+
+    $('sessionNewBtn').addEventListener('click', () => {
+      $('sessionOverlay').classList.remove('open');
+      $('projectsBtn').click();
     });
 
     function attachByValue(value) {
@@ -785,6 +946,7 @@
       if (ws) { wsManualClose = true; ws.close(); ws = null; }
       attached = null;
       lastSeq = 0;
+      showEmpty(true);
     }
 
     function setMode(kind) {
@@ -793,7 +955,7 @@
       $('terminal').style.display = isChat ? 'none' : 'block';
       $('quickkeys').style.display = isChat ? 'none' : 'flex';
       $('chatbar').style.display = isChat ? 'flex' : 'none';
-      $('emptyState').style.display = 'none';
+      showEmpty(false);
       $('promptInput').placeholder = isChat ? 'Prompt untuk Claude…' : 'Ketik perintah…';
     }
 
@@ -1069,10 +1231,10 @@
       if (!attached) return;
       try {
         if (attached.kind === 'chat') {
-          if (!confirm('Tutup sesi chat ini? (riwayat tetap tersimpan & bisa dilanjutkan)')) return;
+          if (!await ask('Tutup sesi chat ini?\nRiwayat tetap tersimpan & bisa dilanjutkan.', 'Tutup')) return;
           await api('/api/chat/' + attached.id, { method: 'DELETE' });
         } else {
-          if (!confirm('Stop sesi terminal ini?')) return;
+          if (!await ask('Stop sesi terminal ini?', 'Stop')) return;
           await api('/api/sessions/' + attached.id, { method: 'DELETE' });
         }
         detach();
@@ -1117,9 +1279,9 @@
         div.querySelector('.name').textContent = p.name;
         div.querySelector('.sub').textContent = p.path;
         div.querySelector('.tag').textContent = p.type;
-        div.addEventListener('click', () => {
+        div.addEventListener('click', async () => {
           const label = engine === 'chat' ? 'Chat Claude' : engine;
-          if (confirm(`Mulai ${label} di "${p.name}"?`)) startSession(p.path);
+          if (await ask(`Mulai ${label} di "${p.name}"?`, 'Mulai')) startSession(p.path);
         });
         wrap.appendChild(div);
       }
@@ -1143,7 +1305,7 @@
           div.querySelector('.sub').textContent = c.last_prompt || c.project_path;
           div.addEventListener('click', async (ev) => {
             if (ev.target.closest('.del')) {
-              if (!confirm('Hapus riwayat chat ini?')) return;
+              if (!await ask('Hapus riwayat chat ini?', 'Hapus')) return;
               try {
                 await api(`/api/chat/${c.id}?delete_history=true`, { method: 'DELETE' });
                 loadChatHistory();
@@ -1218,7 +1380,7 @@
       $('commitMsg').value = '';
     });
 
-    for (const id of ['projectOverlay', 'machineOverlay']) {
+    for (const id of ['projectOverlay', 'machineOverlay', 'sessionOverlay']) {
       $(id).addEventListener('click', e => { if (e.target === $(id)) $(id).classList.remove('open'); });
     }
 
@@ -1240,8 +1402,8 @@
         btn.title = tpl;
         let pressTimer;
         btn.addEventListener('touchstart', () => {
-          pressTimer = setTimeout(() => {
-            if (confirm('Hapus template ini?\n' + tpl)) {
+          pressTimer = setTimeout(async () => {
+            if (await ask('Hapus template ini?\n' + tpl, 'Hapus')) {
               const list = store.templates; list.splice(idx, 1); store.templates = list;
               renderTemplates();
             }
@@ -1374,12 +1536,15 @@
 
     $('pushBtn').addEventListener('click', () => subscribePush(false));
 
+    $('emptyStartBtn').addEventListener('click', () => $('projectsBtn').click());
+
     // ================= Init =================
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
 
     (async function init() {
+      showEmpty(true);
       renderTemplates();
       const machines = store.machines;
       if (!machines.length) {
