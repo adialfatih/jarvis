@@ -254,7 +254,7 @@ sebagai upgrade dari PTY.
 ## 7. Roadmap / Next Steps
 
 ### Fase 0 — Fondasi & keamanan ✅ SELESAI (14 Juli 2026)
-1. ✅ Tailscale terinstall di ketiga perangkat (IP PC Ubuntu: `100.113.143.30`).
+1. ✅ Tailscale terinstall di ketiga perangkat (IP PC Ubuntu: `100.x.y.z`).
 2. ✅ Telegram bot dibuat, token + chat_id tersimpan di `backend/.env`.
 3. ✅ Autentikasi Bearer token di semua endpoint `/api/*` + WebSocket
    (query param `token`), pembanding `hmac.compare_digest`.
