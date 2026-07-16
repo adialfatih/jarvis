@@ -348,6 +348,44 @@
       line-height: 30px;
     }
 
+    /* ---- Attachments ---- */
+    #attachments {
+      display: none;
+      gap: 8px;
+      padding: 8px 8px 0;
+      background: var(--panel);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    #attachments.has { display: flex; }
+    .att { position: relative; flex: 0 0 auto; }
+    .att img {
+      width: 54px;
+      height: 54px;
+      object-fit: cover;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      display: block;
+    }
+    .att .rm {
+      position: absolute;
+      top: -7px;
+      right: -7px;
+      width: 20px;
+      height: 20px;
+      min-width: 20px;
+      min-height: 20px;
+      padding: 0;
+      border-radius: 50%;
+      background: #1d2433;
+      color: #fff;
+      border: none;
+      font-size: 11px;
+      line-height: 1;
+    }
+    .msg .imgrow { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .msg .imgrow img { max-width: 150px; max-height: 150px; border-radius: 10px; border: 1px solid #c9d4ff; display: block; }
+
     /* ---- Composer ---- */
     .composer {
       display: flex;
@@ -478,6 +516,7 @@
     <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/></symbol>
     <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8A8.5 8.5 0 0 1 12.5 3a8.5 8.5 0 0 1 8.5 8.5z"/></symbol>
     <symbol id="i-terminal" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></symbol>
+    <symbol id="i-clip" viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
     <symbol id="i-refresh" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></symbol>
     <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></symbol>
@@ -559,12 +598,15 @@
     </div>
 
     <div>
+      <div id="attachments"></div>
       <div id="templates"></div>
       <div class="composer">
+        <button class="icon-btn" id="attachBtn" title="Lampirkan gambar"><svg class="ic" style="width:18px;height:18px"><use href="#i-clip"/></svg></button>
         <textarea id="promptInput" rows="1" placeholder="Ketik prompt…"></textarea>
         <button class="mic icon-btn" id="micBtn" title="Rekam suara"><svg class="ic" style="width:19px;height:19px"><use href="#i-mic"/></svg></button>
         <button class="send" id="sendBtn">Kirim</button>
       </div>
+      <input type="file" id="fileInput" accept="image/*" multiple style="display:none">
     </div>
   </div>
 
@@ -1074,6 +1116,20 @@
           const div = document.createElement('div');
           div.className = 'msg user';
           div.textContent = ev.text;
+          const rels = ev.text.match(/\.jarvis-uploads\/[A-Za-z0-9._\-]+/g);
+          const base = attachedPath();
+          if (rels && base && machine) {
+            const row = document.createElement('div');
+            row.className = 'imgrow';
+            for (const rel of rels) {
+              const img = document.createElement('img');
+              img.loading = 'lazy';
+              img.src = baseUrl() + '/api/uploads?p=' + encodeURIComponent(base + '/' + rel) +
+                        '&token=' + encodeURIComponent(machine.token);
+              row.appendChild(img);
+            }
+            div.appendChild(row);
+          }
           chatAppend(div);
           break;
         }
@@ -1429,6 +1485,86 @@
       wrap.appendChild(add);
     }
 
+    // ================= Lampiran gambar =================
+    let pendingImages = []; // {blob, name, url}
+
+    async function compressImage(file, maxDim = 1568, quality = 0.85) {
+      try {
+        const bitmap = await createImageBitmap(file);
+        const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+        const w = Math.round(bitmap.width * scale);
+        const h = Math.round(bitmap.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+        const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', quality));
+        return blob || file;
+      } catch (e) { return file; }
+    }
+
+    function renderAttachments() {
+      const wrap = $('attachments');
+      wrap.innerHTML = '';
+      wrap.classList.toggle('has', pendingImages.length > 0);
+      pendingImages.forEach((att, idx) => {
+        const div = document.createElement('div');
+        div.className = 'att';
+        const img = document.createElement('img');
+        img.src = att.url;
+        const rm = document.createElement('button');
+        rm.className = 'rm';
+        rm.textContent = '✕';
+        rm.addEventListener('click', () => {
+          URL.revokeObjectURL(att.url);
+          pendingImages.splice(idx, 1);
+          renderAttachments();
+        });
+        div.append(img, rm);
+        wrap.appendChild(div);
+      });
+    }
+
+    function clearAttachments() {
+      pendingImages.forEach(a => URL.revokeObjectURL(a.url));
+      pendingImages = [];
+      renderAttachments();
+    }
+
+    $('attachBtn').addEventListener('click', () => {
+      if (!attached) { toast('Buka sesi dulu sebelum melampirkan gambar'); return; }
+      $('fileInput').click();
+    });
+
+    $('fileInput').addEventListener('change', async (e) => {
+      const files = [...e.target.files].slice(0, 5 - pendingImages.length);
+      e.target.value = '';
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) continue;
+        const blob = await compressImage(file);
+        pendingImages.push({
+          blob,
+          name: (file.name || 'foto').replace(/\.[^.]+$/, '') + '.jpg',
+          url: URL.createObjectURL(blob),
+        });
+      }
+      renderAttachments();
+    });
+
+    async function uploadAttachments() {
+      const projectPath = attachedPath();
+      if (!projectPath) throw new Error('path project sesi tidak diketahui');
+      const paths = [];
+      for (const att of pendingImages) {
+        const form = new FormData();
+        form.append('file', att.blob, att.name);
+        form.append('path', projectPath);
+        const data = await api('/api/upload', { method: 'POST', body: form });
+        paths.push(data.path);
+      }
+      clearAttachments();
+      return paths;
+    }
+
     // ================= Composer =================
     const promptInput = $('promptInput');
     promptInput.addEventListener('input', () => {
@@ -1436,9 +1572,24 @@
       promptInput.style.height = Math.min(promptInput.scrollHeight, 110) + 'px';
     });
 
-    $('sendBtn').addEventListener('click', () => {
+    $('sendBtn').addEventListener('click', async () => {
       if (!attached) { toast('Belum ada sesi aktif'); return; }
-      const text = promptInput.value;
+      let text = promptInput.value;
+
+      if (pendingImages.length) {
+        $('sendBtn').disabled = true;
+        try {
+          const paths = await uploadAttachments();
+          const note = 'Lihat gambar: ' + paths.join(', ');
+          text = text.trim() ? text.trimEnd() + '\n\n(' + note + ')' : note;
+        } catch (e) {
+          toast('Upload gambar gagal: ' + e.message);
+          $('sendBtn').disabled = false;
+          return;
+        }
+        $('sendBtn').disabled = false;
+      }
+
       if (attached.kind === 'chat') {
         if (!text.trim()) return;
         wsSend({ t: 'prompt', text });

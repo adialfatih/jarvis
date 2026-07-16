@@ -9,6 +9,7 @@ from fastapi import (
     Depends,
     FastAPI,
     File,
+    Form,
     HTTPException,
     Query,
     UploadFile,
@@ -585,6 +586,69 @@ async def run_git(cwd: str, command: list[str]) -> str:
     )
     stdout, _ = await asyncio.wait_for(process.communicate(), timeout=60)
     return stdout.decode("utf-8", errors="replace")[:100_000]
+
+
+# ---------- Upload gambar (lampiran prompt) ----------
+
+UPLOAD_DIR_NAME = ".jarvis-uploads"
+UPLOAD_MAX_BYTES = 10 * 1024 * 1024
+UPLOAD_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+UPLOAD_MAX_AGE = 7 * 24 * 3600
+
+
+@api.post("/upload")
+async def upload_image(file: UploadFile = File(...), path: str = Form(...)):
+    import time as _time
+    import uuid as _uuid
+
+    project = Path(path)
+    if not project.is_dir():
+        raise HTTPException(status_code=400, detail="Path project tidak valid")
+
+    ext = Path(file.filename or "img.jpg").suffix.lower() or ".jpg"
+    if ext not in UPLOAD_EXTS:
+        raise HTTPException(status_code=400, detail=f"Tipe file tidak didukung: {ext}")
+
+    uploads = project / UPLOAD_DIR_NAME
+    uploads.mkdir(exist_ok=True)
+    # folder self-ignoring: tidak menyentuh .gitignore project
+    marker = uploads / ".gitignore"
+    if not marker.exists():
+        marker.write_text("*\n")
+
+    # bersihkan upload lama
+    now = _time.time()
+    for old in uploads.glob("img-*"):
+        try:
+            if now - old.stat().st_mtime > UPLOAD_MAX_AGE:
+                old.unlink()
+        except OSError:
+            pass
+
+    name = f"img-{_time.strftime('%Y%m%d-%H%M%S')}-{_uuid.uuid4().hex[:4]}{ext}"
+    target = uploads / name
+    written = 0
+    with open(target, "wb") as handle:
+        while chunk := await file.read(1024 * 1024):
+            written += len(chunk)
+            if written > UPLOAD_MAX_BYTES:
+                handle.close()
+                target.unlink(missing_ok=True)
+                raise HTTPException(status_code=413, detail="Gambar terlalu besar (maks 10MB)")
+            handle.write(chunk)
+
+    return {"path": f"{UPLOAD_DIR_NAME}/{name}", "abs": str(target)}
+
+
+@app.get("/api/uploads")
+async def serve_upload(p: str, token: str = Query("")):
+    """Serve thumbnail lampiran untuk <img> (auth via token query, dibatasi folder uploads)."""
+    if not ws_token_valid(token):
+        raise HTTPException(status_code=401, detail="Token salah")
+    target = Path(p).resolve()
+    if UPLOAD_DIR_NAME not in target.parts or not target.is_file():
+        raise HTTPException(status_code=404, detail="File tidak ditemukan")
+    return FileResponse(target)
 
 
 @api.post("/transcribe")

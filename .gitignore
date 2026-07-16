@@ -50,3 +50,7 @@ backend/vapid_private.pem
 Thumbs.db
 desktop.ini
 
+.claude/
+.agents/
+.codex/
+.kimchi/
